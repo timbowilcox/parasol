@@ -1,15 +1,5 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
-    "rootDir": "./src",
-    "outDir": "./dist",
-    "composite": true
-  },
   "include": ["src/**/*.ts"],
-  "exclude": ["dist", "node_modules", "**/*.test.ts", "data/**"],
-  "references": [
-    { "path": "../core" },
-    { "path": "../ai" },
-    { "path": "../playbooks" }
-  ]
+  "exclude": ["dist", "node_modules", "data/**"]
 }

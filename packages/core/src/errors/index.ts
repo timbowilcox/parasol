@@ -29,7 +29,10 @@ export class AppError extends Error {
 // ─── HTTP-mapped errors ───────────────────────────────────────────────────────
 
 export class NotFoundError extends AppError {
-  constructor(message = 'Not found') {
+  constructor(resourceOrMessage = 'Not found', id?: string) {
+    const message = id !== undefined
+      ? `${resourceOrMessage} not found: ${id}`
+      : resourceOrMessage
     super(message, 'NOT_FOUND', 404)
   }
 }

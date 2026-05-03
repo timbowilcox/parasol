@@ -1,116 +1,106 @@
-# Handoff: Sprint 1, Day 1 — Foundation infrastructure
+# Handoff: Sprint 1, Day 2 — Repositories + AI client
 
-Date: 2026-05-03
-Session type: Sprint 1 Day 1
+Date: 2026-05-04
+Session type: Sprint 1 Day 2
 
 ## What was completed
 
-Sprint 1 day-1 scope: foundation infrastructure, database migrations, domain types, PII scrubbing, Sentry integration (DSN-guarded), ESLint v9 flat config, Vitest across all packages.
+Day 2 scope per `docs/sprint-1-plan.md`: data access layer + AI client wrapper. Nothing calls Supabase or Anthropic directly from app code after today.
 
-### Database migrations (apps/web/supabase/)
+### Database typing (`packages/core/src/db.ts`)
 
-- `config.toml` — Supabase CLI config; Tim must `supabase link --project-ref <ref>` and then `pnpm db:migrate` before day-3 work touches Supabase.
-- `0001_foundation.sql` — `workspaces`, `profiles`, `playbook_overrides` tables with full RLS policies.
-- `0002_corpus.sql` — `corpus_sources` (with 6 Kenya authority seed rows), `corpus_ingestion_runs`, `corpus_documents`, `corpus_chunks`. HNSW index (m=16, ef_construction=128) on `embedding vector_cosine_ops`. GIN index on `fts` tsvector and `clause_types`. RLS: authenticated SELECT on corpus tables, admin-only on runs.
-- `0003_reviews.sql` — `reviews`, `review_documents`, `extracted_clauses`, `issues`, `citations`, `pipeline_events` with full workspace-scoped RLS.
-- `0004_audit.sql` — `audit_log` append-only table with `previous_hash / hash` chain. No UPDATE/DELETE policies at DB level. INSERT for workspace members, SELECT for admins only.
+- Hand-rolled `Database` type covering the four Day-2 tables: `workspaces`, `profiles`, `reviews`, `audit_log` (corpus + reviews-detail tables follow when their repositories land).
+- Required `__InternalSupabase: { PostgrestVersion: '12.2.3' }` field for `@supabase/supabase-js` v2.45+ — without it, all `.from(...)` calls collapse to `never`.
+- All Row/Insert/Update declared as `type` aliases (not `interface`) — interfaces fail Supabase's `GenericTable extends Record<string, unknown>` constraint.
+- Auto-generation deferred per DEF-043 (needs Supabase PAT or Docker Desktop).
 
-### Core package (packages/core/src/)
+### Repository layer (`packages/core/src/repositories/`)
 
-- `types/index.ts` — Full domain type vocabulary: `Jurisdiction`, `ContractType`, `ClauseType` (40 values), `CitationSource`, `Citation` (structured object, no stringly-typed citations), `ModelRole`, `ReviewStatus`, `AuditAction`, and supporting enums.
-- `errors/index.ts` — AppError hierarchy: `AppError → NotFoundError, UnauthorisedError, ForbiddenError, ValidationError, ConflictError, PipelineError → CitationValidationError, IntakeError → UnsupportedFormatError, UnsupportedContractTypeError, FileTooLargeError, QualityTooLowError, CorpusError → EmbeddingError`. All `code` values passed via constructor chain to avoid readonly violations.
-- `errors/errors.test.ts` — 21 tests; 100% coverage of hierarchy.
-- `vitest.config.ts` — Vitest with `passWithNoTests: true`.
+- `types.ts` — typed `SupabaseClient` alias (with `Database` baked in), `Tables<T>` and `TablesInsert<T>` helpers.
+- `base.ts` — `BaseRepository` abstract class; takes a `SupabaseClient` at construction (app layer creates it; repos never construct their own).
+- `workspaces.ts` — `WorkspaceRepository.getById / getBySlug / findBySlug`. Throws `NotFoundError` on miss, except `findBySlug` which returns `null`.
+- `reviews.ts` — `ReviewRepository.create / getById / updateStatus`. `updateStatus(id, 'failed', errorMessage)` records the error message; success transitions don't.
+- `audit.ts` — `AuditRepository.appendEvent / getLatestHash / verifyChain`. Hash chain implementation:
+  - Genesis hash = SHA256(''), exported as `GENESIS_HASH`.
+  - `computeChainHash({ id, actorId, action, payload, previousHash })` — pure deterministic function (matches the migration's formula `SHA256(id || actor_id || action || payload || previous_hash)`).
+  - `stableStringify(value)` — order-independent JSON serialisation; required so re-serialised payloads produce identical hashes.
+  - `verifyChain(workspaceId)` — recomputes every hash from genesis and returns the index of the first broken link.
+  - **Concurrency caveat**: read-then-write pattern. Two simultaneous appends to the same workspace can race. Acceptable for Sprint 1's low volume; DEF-044 (Sprint 5) replaces this with a Postgres `append_audit_event` RPC that holds a row lock through the insert.
 
-### PII scrubbing (apps/web/src/lib/)
+### AI orchestration (`packages/ai/src/`)
 
-- `pii-scrub.ts` — Framework-agnostic `scrubEvent()` targeting Sentry event shape. Scrubs: top-level message, exception values, user object (keeps only `id`), request body (fully redacted), request headers (sensitive-field check), `extra`, `contexts`. Sensitive field patterns are compound-name-aware (e.g., `accessToken`, `ANTHROPIC_API_KEY`, `senderEmail`).
-- `pii-scrub.test.ts` — 22 tests.
+- `types.ts` — Stage interface, prompt artefacts, model role resolution. Notable shapes:
+  - `PromptArtefact<TInput, TOutput>` — versioned, schema-validated prompt unit; lives in `packages/ai/src/prompts/<stage-name>.ts` (not yet populated; Day 7+).
+  - `Stage<Input, Output>` — declares `modelRole`, `prompt`, `inputSchema`, `outputSchema`, `cacheable`, `retry`, `evalCases`, `run()`. Matches the contract documented in `docs/orchestration.md`.
+  - `OrchestratorContext` — passed to `run()`; carries reviewId, workspaceId, jurisdiction, contractType, pre-loaded `playbookContext`, current-clause `authorityChunks`, an `emitEvent` hook for `pipeline_events`, and an optional `modelEnv` override for A/B testing (DEF-041).
+  - `resolveModel(role, env?)` — reads `ANTHROPIC_MODEL_HAIKU/SONNET/OPUS` env vars, falls back to `DEFAULT_MODEL_BY_ROLE` constants.
+- `client.ts` — Anthropic SDK wrapper. Singleton client lazy-initialised from `ANTHROPIC_API_KEY`. `createMessage({ modelRole, system, messages, maxTokens, modelEnv })` is the canonical call site.
+  - `cachedTextBlock(text)` — produces a `cache_control: { type: 'ephemeral' }` text block for prompt caching of stable context (playbooks, system prompts).
+  - `plainTextBlock(text)` — uncached counterpart for per-call dynamic content.
+  - `overrideClient(client)` — test hook so unit tests can inject a `vi.fn`-based stub instead of a real SDK call.
 
-### Sentry integration (apps/web/)
+### Supabase client factory split
 
-- `sentry.client.config.ts` — `Sentry.init()` guarded by `process.env.NEXT_PUBLIC_SENTRY_DSN`; `beforeSend` calls `scrubEvent()` with double-cast for type compatibility.
-- `sentry.server.config.ts` — Same pattern, uses `process.env.SENTRY_DSN`.
-- `next.config.ts` — `withSentryConfig()` wrapper; source maps uploaded in CI only.
+- `apps/web/src/lib/supabase/server.ts` — typed `SupabaseClient<Database>` for Server Components / actions / route handlers (Day 1 file, now generic-typed).
+- `apps/web/src/lib/supabase/browser.ts` — new `createBrowserClient()` for Client Components.
+- `apps/web/src/server/auth.ts` — refactored `requireAuth` / `requireAdmin` around a shared `loadProfile()` helper to fix a TypeScript narrowing quirk where `redirect(...)` (whose return is `never`) collapsed the destructured `profile` to `never` instead of narrowing it to non-null.
 
-Note: No Sentry DSN is configured. Tim confirmed this is intentional for Sprint 1. When a DSN is set in `.env.local` or Vercel, both configs activate automatically.
+## Tests added
 
-### Server-side utilities (apps/web/src/)
+| Suite | Tests | Notes |
+|-------|-------|-------|
+| `packages/core/src/repositories/audit.test.ts` | 18 | Pure-function tests for `GENESIS_HASH`, `stableStringify`, `computeChainHash`, plus end-to-end mock-Supabase tests for `appendEvent` and `verifyChain` (genesis bootstrap, chain linking, per-workspace separation, system-event chain, tamper detection in payload + previous_hash). |
+| `packages/core/src/repositories/workspaces.test.ts` | 6 | `getById`, `getBySlug`, `findBySlug` happy/missing/error paths. |
+| `packages/core/src/repositories/reviews.test.ts` | 8 | `create` defaults + overrides + missing-data, `getById`, `updateStatus` (success + failed-with-error-message + missing). |
+| `packages/ai/src/client.test.ts` | 11 | `resolveModel` env precedence, `readEnvModels`, `cachedTextBlock` / `plainTextBlock` shape, `createMessage` SDK forwarding (model resolution, cached system passthrough, max_tokens default + override). |
 
-- `lib/supabase/server.ts` — `createServerClient()` factory using `@supabase/ssr`; `setAll` swallows errors in Server Component context (read-only cookies).
-- `server/auth.ts` — `requireAuth()` (redirect to /login on failure) and `requireAdmin()` (throws `ForbiddenError` → 404 for non-admins per CLAUDE.md "intentionally undiscoverable").
-
-### Build tooling
-
-- `eslint.config.mjs` (root) — ESLint v9 flat config for all packages: `@eslint/js` + `typescript-eslint` recommended, `no-console: error`, `@typescript-eslint/no-explicit-any: error`.
-- `apps/web/eslint.config.mjs` — Extends `eslint-config-next/core-web-vitals` (which exports a native flat config in v16) plus the two rules above.
-- Note: Next.js 16 removed the `next lint` subcommand. `apps/web` lint script changed to `eslint src`.
-- `vitest.config.ts` files created for all 6 packages. Packages without src content yet (ai, corpus, eval, playbooks) have `passWithNoTests: true` and stub `src/index.ts`.
-- `@sentry/nextjs` updated to `^10.0.0` (v8 only supports Next.js ≤ 15; v10 supports Next.js 16).
-- `@anthropic-ai/sdk` in `packages/ai` updated to `^0.92.0` (^0.34.0 had no stable release).
-
-### sprint-1-plan.md
-
-- `docs/sprint-1-plan.md` — Day-by-day 14-day breakdown with hard deadlines called out (Day 3: golden dataset, Day 5: lawyer review + Resend MX, Day 8: Voyage quota confirmation) and Tim action items flagged per day.
+Total Day 2 additions: **43 tests**. Cumulative repo tests: **86 passing** (43 from Day 1 — 21 errors, 22 PII scrub — plus 43 from Day 2).
 
 ## Verification evidence
 
 ```
-pnpm turbo typecheck test lint
+pnpm turbo typecheck test lint --force
 → 18 successful, 18 total (6 packages × 3 tasks)
-→ Core: 21 tests passing
-→ Web: 22 tests passing (PII scrub suite)
-→ All other packages: pass with no test files (expected, Day 2+ adds implementations)
+→ Zero TS errors, zero lint warnings, all tests green
 ```
 
-TypeScript: zero errors across all packages. Lint: zero warnings. All tests green.
+## DEFERRED.md additions
+
+- **DEF-043**: Auto-generate Database TypeScript types from Supabase schema (waiting on Supabase PAT or Docker Desktop)
+- **DEF-044**: Atomic audit log append via Postgres RPC (Sprint 5; replaces the current read-then-write race-prone implementation)
 
 ## Database state
 
-All 4 migrations applied to Supabase project `rfgcgvafxdbpypzaokdh` (eu-west-2 London):
-
-```
-Local | Remote
-------|-------
-0001  | 0001  (foundation: workspaces, profiles, playbook_overrides + RLS)
-0002  | 0002  (corpus: sources, runs, documents, chunks + HNSW + 6 Kenya seeds)
-0003  | 0003  (reviews: reviews, documents, clauses, issues, citations, events)
-0004  | 0004  (audit: append-only audit_log with hash chain)
-```
-
-Connection: project uses the newer Supavisor pooler at `aws-1-eu-west-2.pooler.supabase.com:5432` (the legacy `aws-0-*` and direct `db.PROJECT.supabase.co` URLs do not work for this project). The `DATABASE_URL` in `.env.local` is set to the pooler URL.
-
-Tooling notes:
-- `supabase` CLI installed as a workspace devDep (^2.98.0)
-- `apps/web/package.json` `db:migrate` and `db:reset` scripts use `--db-url $DATABASE_URL` (no `supabase login` / `supabase link` required)
-- Caveat: the script uses a POSIX-style `$DATABASE_URL` that won't expand on Windows cmd.exe. Run from bash/git-bash, or wrap with a dotenv loader before Day 5 if Windows-cmd compatibility is needed.
+Unchanged from Day 1. All 4 migrations (`0001_foundation`, `0002_corpus`, `0003_reviews`, `0004_audit`) remain applied and in sync with `supabase migration list`.
 
 ## What is NOT done
 
-- Repository layer (`packages/core/src/repositories/`) — Day 2.
-- AI client wrapper (`packages/ai/src/client.ts`) — Day 2.
-- Prompt versioning system (`packages/ai/src/prompts/`) — Day 2.
-- Document intake pipeline — Day 4+.
-- Corpus ingestion client — Day 5+.
-- Playbook loader and validator — Day 2.
-- Review orchestration — Day 6+.
-- Web UI (review surfaces, workspace management) — Day 8+.
-- 20-NDA golden dataset for eval — needed by Day 3 (Tim action + DEF-027).
+- Corpus pipeline (Day 3): scraper, normaliser, chunker, embedder, tagger, seed script. Hard deadline depends on Tim's 20-NDA dataset arrival.
+- Hybrid retrieval (Day 4): `retrieveAuthority(query, options)` with BM25 + pgvector + RRF + Voyage rerank.
+- Playbook loader and validator (Day 5): Zod schema + citation-resolution check.
+- Email intake webhook (Day 5).
+- Eval harness (Day 6).
+- Pipeline stages 1-4 — Haiku stages (Day 7).
+- Pipeline stages 5-8 — Sonnet stages including `verify-citations` (Day 8).
+- 20-NDA golden dataset — needed by Day 3 (Tim action + DEF-027).
 - Lawyer review of `packages/playbooks/kenya/nda.yaml` — needed by Day 5 (DEF-028).
 - Resend MX record for `ask.parasol.co.ke` — needed by Day 5 (Tim action, DEF-001).
 
 ## Known issues / technical notes
 
-- The `@parasol/ai`, `@parasol/corpus`, `@parasol/eval`, `@parasol/playbooks` packages have stub `src/index.ts` (`export {}`) only. Linting and typecheck pass; vitest passes with `passWithNoTests: true`. These stubs will be replaced starting Day 2.
-- Turbo outputs warnings "no output files found for task test" because `vitest run` doesn't generate coverage files (no `--coverage` flag yet). These are warnings only, not failures; they'll go away when coverage is wired in Sprint 3.
-- The `.env.example` includes `SENTRY_DSN` and `NEXT_PUBLIC_SENTRY_DSN`. Per CLAUDE.md, DSNs are not secrets (they're embedded in browser bundles). These can be committed to `.env.example`.
+- **Hand-rolled Database type drift risk**: any new migration must be mirrored in `packages/core/src/db.ts` until DEF-043 lands. Mitigation: the `db:types` script is wired (`apps/web/package.json`); flipping to auto-generation is a one-line change once a PAT exists.
+- **Audit chain race condition**: documented at the top of `appendEvent`. DEF-044 will fix this with a Postgres RPC. Not a Sprint 1 risk.
+- **`tsconfig.json` cleanup**: removed `composite: true` and `references` from package tsconfigs. They were creating phantom `dist/` dependencies that broke `pnpm typecheck` from a clean state. With `main: "./src/index.ts"` in each package and pnpm workspace symlinks, cross-package type resolution flows through source files directly — no build step needed.
 
-## Exact next step (Day 2)
+## Exact next step (Day 3)
 
-1. **Repository layer** — `packages/core/src/repositories/`: `WorkspaceRepository`, `ReviewRepository`, `CorpusRepository`. Each uses the repository pattern (thin API routes, thick repositories). Thin Supabase client wrapper; no `service_role` in app code.
-2. **AI client wrapper** — `packages/ai/src/client.ts`: Anthropic SDK singleton, model-role resolver (`haiku → claude-haiku-4-5-20251001`, `sonnet → claude-sonnet-4-7-20251001` for Sprint 1), prompt-cache configuration, retry logic.
-3. **Prompt versioning** — `packages/ai/src/prompts/`: Versioned prompt registry. Each prompt has a name, version, modelRole, and content. Prompts are exported as typed objects, not raw strings.
-4. **Playbook loader** — `packages/playbooks/src/loader.ts`: Load and Zod-validate YAML playbooks at runtime; export typed `Playbook` objects for use in the pipeline.
+⚠️ **GOLDEN DATASET DUE TODAY (2026-05-05)** — see Tim action below.
 
-Before starting Day 2, confirm with Tim:
-- Whether the 20-NDA dataset has been sourced (needed by end of Day 3 to stay on schedule).
+1. **kenyalaw.org scraper** — `packages/corpus/src/scrapers/kenyalaw.ts`. Polite scraper: 1 req / 2s, idempotent, respects robots.txt. Outputs `corpus_documents` rows for the Kenyan Constitution, all Acts, and a configurable cap on Court of Appeal / High Court judgments (start at 50 for the sprint fixture).
+2. **Normaliser** — `packages/corpus/src/normaliser.ts`: HTML → clean structured text with section hierarchy preserved.
+3. **Chunker** — `packages/corpus/src/chunker.ts`: section-aware ~500-token chunks; each chunk's `text_with_context` is prefixed with its hierarchy ("Act > Part > Section > ...").
+4. **Embedder** — `packages/corpus/src/embedder.ts`: Voyage-3 batch embedding (128 per batch); writes `corpus_chunks.embedding`.
+5. **Tagger** — `packages/corpus/src/tagger.ts`: Haiku-assisted `clause_type` + `area_of_law` tagging; cached by content hash.
+6. **Seed script** — ingest at minimum DPA 2019, Companies Act 2015, Kenya Information & Communications Act 1998, plus 50 judgments as the sprint fixture corpus.
+
+**Tim action for Day 3**: deliver 20 anonymised NDAs to `packages/eval/data/golden/nda/` with the ground-truth annotation template (DEF-027). Without these by end of day, the eval harness on Day 6 falls behind.

@@ -3,7 +3,7 @@
 
 import { redirect } from 'next/navigation'
 import { createServerClient } from '@/lib/supabase/server'
-import { ForbiddenError, UnauthorisedError } from '@parasol/core'
+import { ForbiddenError, UnauthorisedError, type ProfileRow } from '@parasol/core'
 
 export interface AuthenticatedUser {
   id: string
@@ -12,58 +12,52 @@ export interface AuthenticatedUser {
   isParasolAdmin: boolean
 }
 
-// Returns the authenticated user's profile or redirects to /login.
-export async function requireAuth(): Promise<AuthenticatedUser> {
+// Fetches the authenticated user's profile, returning null if the session
+// is invalid or the profile row is missing. Used by both requireAuth (which
+// redirects on null) and requireAdmin (which throws on null).
+async function loadProfile(): Promise<{ userId: string; profile: ProfileRow } | null> {
   const supabase = await createServerClient()
   const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
 
-  if (!user) {
-    redirect('/login')
-  }
-
-  const { data: profile, error } = await supabase
+  const { data, error } = await supabase
     .from('profiles')
-    .select('workspace_id, role, is_parasol_admin')
+    .select('*')
     .eq('id', user.id)
     .single()
 
-  if (error || !profile) {
+  if (error || !data) return null
+  return { userId: user.id, profile: data as ProfileRow }
+}
+
+// Returns the authenticated user's profile or redirects to /login.
+export async function requireAuth(): Promise<AuthenticatedUser> {
+  const result = await loadProfile()
+  if (!result) {
     redirect('/login')
   }
-
   return {
-    id: user.id,
-    workspaceId: profile.workspace_id as string,
-    role: profile.role as AuthenticatedUser['role'],
-    isParasolAdmin: profile.is_parasol_admin as boolean,
+    id: result.userId,
+    workspaceId: result.profile.workspace_id,
+    role: result.profile.role,
+    isParasolAdmin: result.profile.is_parasol_admin,
   }
 }
 
 // Throws ForbiddenError (→ 404 in admin middleware) if user is not parasol_admin.
 // CLAUDE.md: non-admins receive 404, not 403 (intentionally undiscoverable).
 export async function requireAdmin(): Promise<AuthenticatedUser> {
-  const supabase = await createServerClient()
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
+  const result = await loadProfile()
+  if (!result) {
     throw new UnauthorisedError()
   }
-
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('workspace_id, role, is_parasol_admin')
-    .eq('id', user.id)
-    .single()
-
-  if (error || !profile || !(profile.is_parasol_admin as boolean)) {
-    // Return 404 to non-admins — the admin surface is intentionally undiscoverable
+  if (!result.profile.is_parasol_admin) {
     throw new ForbiddenError()
   }
-
   return {
-    id: user.id,
-    workspaceId: profile.workspace_id as string,
-    role: profile.role as AuthenticatedUser['role'],
+    id: result.userId,
+    workspaceId: result.profile.workspace_id,
+    role: result.profile.role,
     isParasolAdmin: true,
   }
 }

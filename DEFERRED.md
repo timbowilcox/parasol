@@ -267,6 +267,20 @@ Path A architecture means Parasol is a US-incorporated SaaS selling cross-border
 - **Whose action**: Claude Code (run A/B, produce eval delta report); Tim (final adoption decision if metrics are mixed)
 - **Cost impact if adopted**: per-review cost rises from ~$0.20 to ~$0.60. At v1-launch volume (~1,500 reviews/month) that's a ~$600/month delta — meaningful but trivial against revenue. v1 launch bars (F1 ≥0.88, redline ≥4.2, hallucination <1%) may be unreachable on Sonnet alone, in which case Opus adoption becomes a launch blocker rather than an optimisation.
 
+### Engineering hygiene
+
+#### DEF-043: Auto-generate Database TypeScript types from Supabase schema
+- **Trigger**: `condition:supabase-PAT-or-docker-available`
+- **What**: Today `packages/core/src/db.ts` is hand-rolled to mirror the migrations because `supabase gen types typescript --db-url` requires Docker (for postgres-meta) and `--project-id` requires a Supabase Personal Access Token, neither of which is present locally. As a consequence, every new migration requires a manual edit to `db.ts`. Switch to auto-generation as soon as one of: (a) Tim creates a Supabase PAT and stores it as `SUPABASE_ACCESS_TOKEN` in `.env.local`; or (b) Docker Desktop is installed. Wire the existing `pnpm db:types` script (already in `apps/web/package.json`), redirect output to `packages/core/src/db.ts`, and replace the hand-rolled type. Add a CI check that fails if migrations changed but `db.ts` is stale.
+- **Why deferred**: Hand-rolling the type for 4 tables is faster than installing Docker mid-Sprint-1 and avoids creating an account dependency. Once the PAT exists this is a 10-minute swap.
+- **Whose action**: Tim (provide PAT or install Docker); Claude Code (swap the file + add CI check)
+
+#### DEF-044: Atomic audit log append via Postgres RPC
+- **Trigger**: `sprint:5` OR `condition:concurrent-audit-write-detected`
+- **What**: `AuditRepository.appendEvent` currently uses a read-then-write pattern (read latest hash, compute new hash, insert). Two concurrent appends to the same workspace can race and produce two rows with the same `previous_hash`, breaking strict chain integrity. Add a new migration that defines `public.append_audit_event(...)` as a `security definer` plpgsql function which `SELECT ... FOR UPDATE`s the latest row inside a transaction, computes the hash server-side using `pgcrypto.digest`, and inserts atomically. Update `AuditRepository.appendEvent` to call the RPC instead of doing the read-then-write in the app layer. Keep `computeChainHash` and `verifyChain` in TypeScript for offline verification.
+- **Why deferred**: Sprint 1 audit volume is low (one event per review create + complete + admin action). Race conditions are extremely unlikely. Sprint 5 ships the audit log UI and that's when chain integrity needs to be bulletproof for the customer-facing surface.
+- **Whose action**: Claude Code
+
 ### Payments
 
 #### DEF-042: Sprint 7 — evaluate M-PESA acceptance options
