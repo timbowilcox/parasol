@@ -65,9 +65,28 @@ pnpm turbo typecheck test lint
 
 TypeScript: zero errors across all packages. Lint: zero warnings. All tests green.
 
+## Database state
+
+All 4 migrations applied to Supabase project `rfgcgvafxdbpypzaokdh` (eu-west-2 London):
+
+```
+Local | Remote
+------|-------
+0001  | 0001  (foundation: workspaces, profiles, playbook_overrides + RLS)
+0002  | 0002  (corpus: sources, runs, documents, chunks + HNSW + 6 Kenya seeds)
+0003  | 0003  (reviews: reviews, documents, clauses, issues, citations, events)
+0004  | 0004  (audit: append-only audit_log with hash chain)
+```
+
+Connection: project uses the newer Supavisor pooler at `aws-1-eu-west-2.pooler.supabase.com:5432` (the legacy `aws-0-*` and direct `db.PROJECT.supabase.co` URLs do not work for this project). The `DATABASE_URL` in `.env.local` is set to the pooler URL.
+
+Tooling notes:
+- `supabase` CLI installed as a workspace devDep (^2.98.0)
+- `apps/web/package.json` `db:migrate` and `db:reset` scripts use `--db-url $DATABASE_URL` (no `supabase login` / `supabase link` required)
+- Caveat: the script uses a POSIX-style `$DATABASE_URL` that won't expand on Windows cmd.exe. Run from bash/git-bash, or wrap with a dotenv loader before Day 5 if Windows-cmd compatibility is needed.
+
 ## What is NOT done
 
-- Database migrations not applied to Supabase dev project (Tim action: `supabase link --project-ref <ref>` then `pnpm db:migrate`).
 - Repository layer (`packages/core/src/repositories/`) — Day 2.
 - AI client wrapper (`packages/ai/src/client.ts`) — Day 2.
 - Prompt versioning system (`packages/ai/src/prompts/`) — Day 2.
@@ -79,7 +98,6 @@ TypeScript: zero errors across all packages. Lint: zero warnings. All tests gree
 - 20-NDA golden dataset for eval — needed by Day 3 (Tim action + DEF-027).
 - Lawyer review of `packages/playbooks/kenya/nda.yaml` — needed by Day 5 (DEF-028).
 - Resend MX record for `ask.parasol.co.ke` — needed by Day 5 (Tim action, DEF-001).
-- Supabase project linked and migrations applied — needed by Day 3 (Tim action).
 
 ## Known issues / technical notes
 
@@ -95,5 +113,4 @@ TypeScript: zero errors across all packages. Lint: zero warnings. All tests gree
 4. **Playbook loader** — `packages/playbooks/src/loader.ts`: Load and Zod-validate YAML playbooks at runtime; export typed `Playbook` objects for use in the pipeline.
 
 Before starting Day 2, confirm with Tim:
-- Supabase project ref for `supabase link` (needed before any repository work that touches the real DB).
 - Whether the 20-NDA dataset has been sourced (needed by end of Day 3 to stay on schedule).

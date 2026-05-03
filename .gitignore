@@ -49,6 +49,10 @@ packages/eval/data/intake-fixtures/**/*.docx
 packages/eval/data/intake-fixtures/**/*.pdf
 packages/eval/results/run-*.json
 
+# Supabase CLI working state (kept local, not part of source)
+**/supabase/.temp/
+**/supabase/.branches/
+
 # Misc
 .turbo/
 .cache/

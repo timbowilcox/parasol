@@ -10,8 +10,8 @@
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
     "lint": "eslint src",
-    "db:migrate": "supabase db push",
-    "db:reset": "supabase db reset",
+    "db:migrate": "supabase db push --db-url $DATABASE_URL",
+    "db:reset": "supabase db reset --db-url $DATABASE_URL",
     "db:types": "supabase gen types typescript --project-id $SUPABASE_PROJECT_REF > src/lib/db-types.ts"
   },
   "dependencies": {
