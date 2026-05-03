@@ -22,7 +22,10 @@ import type { Jurisdiction, DocumentType } from '@parasol/core'
 import type { Scraper } from './types.js'
 import { politeFetch } from './types.js'
 
-const DEFAULT_BASE = 'https://kenyalaw.org'
+// As of the 2024 redesign, kenyalaw.org redirects most legal-content paths to
+// new.kenyalaw.org which serves the Akoma Ntoso (AKN) HTML rendering. The
+// legacy domain is mostly informational pages now.
+const DEFAULT_BASE = 'https://new.kenyalaw.org'
 
 // Sprint 1 fixture: the three acts called out in docs/sprint-1-plan.md
 // + Constitution. Full enumeration in Sprint 4.

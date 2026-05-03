@@ -51,10 +51,17 @@ function parseHtml(html: string, sourceType: string): Section[] {
   // Strip non-content elements that pollute extracted text.
   $('script, style, nav, header, footer, aside, .navigation, .nav, .menu, .sidebar, .ads, .breadcrumb, .breadcrumbs, .skip-link, noscript').remove()
 
-  // Find a content root. Most Kenya Law pages put the document body inside
-  // a `.akn-content`, `.content`, `#content`, or `main` container.
+  // Find a content root. Selector priority (most specific → most general):
+  // - `.akn-act`, `.akn-akomaNtoso` — Akoma Ntoso statute root used by Kenya Law
+  // - `main`, `#content`, `.content` — generic content containers
+  // - `body` — fallback
+  //
+  // Important: do NOT use `.akn-content` as the root — in Kenya Law's AKN
+  // rendering there are *thousands* of `.akn-content` spans (one per leaf
+  // paragraph), and picking the first one yields only the preamble.
   const root =
-    $('.akn-content').first()[0] ??
+    $('.akn-act').first()[0] ??
+    $('.akn-akomaNtoso').first()[0] ??
     $('main').first()[0] ??
     $('#content').first()[0] ??
     $('.content').first()[0] ??

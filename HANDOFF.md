@@ -1,101 +1,118 @@
-# Handoff: Sprint 1, Day 3 — Corpus pipeline + NDA dataset
+# Handoff: Sprint 1, Day 4 — Hybrid retrieval + smoke test
 
 Date: 2026-05-04
-Session type: Sprint 1 Day 3
+Session type: Sprint 1 Day 4
 
 ## What was completed
 
-Day 3 scope per `docs/sprint-1-plan.md`: corpus ingestion pipeline (scraper → normaliser → chunker → embedder → tagger → repository → orchestrator → CLI). Also: 20-NDA golden dataset sourced from public web (since Tim has none in the personal network).
+Day 4 scope per `docs/sprint-1-plan.md`: hybrid retrieval (BM25 + dense vector + RRF + Voyage rerank-2). Plus the live ingest smoke test against dev Supabase, which surfaced two issues — one I fixed (AKN root selector) and one Tim needs to fix (Voyage rate-limit, escalated DEF-005).
 
-### Database typing (extended)
+### New migrations
 
-- `packages/core/src/db.ts` — added Row/Insert/Update for `corpus_sources`, `corpus_ingestion_runs`, `corpus_documents`, `corpus_chunks` and wired into the `Database` interface.
+- **0005_corpus_retrieval.sql** — two SQL functions:
+  - `match_corpus_chunks(query_embedding vector, match_count, jurisdiction_filter, source_type_filter, clause_types_filter)` — top-N pgvector cosine search with eager join to `corpus_documents`. Filters out superseded documents and rows with null embeddings.
+  - `bm25_corpus_chunks(query_text, match_count, jurisdiction_filter, source_type_filter, clause_types_filter)` — top-N BM25 search using `websearch_to_tsquery` (forgiving of natural-language input). Returns `ts_rank_cd` scores so the JS layer can do RRF properly.
+  - Both functions granted to `authenticated` so retrieval works under user session (no service-role usage in retrieval).
+- **0006_corpus_grants.sql** — explicit `GRANT ALL ... TO anon, authenticated, service_role` on every Sprint 1 public table. Surfaced as the first thing the smoke test hit: `permission denied for table corpus_sources`. The default `ALTER DEFAULT PRIVILEGES` only auto-grants to tables created by the `postgres` superuser; the migrator role used by `supabase db push --db-url` doesn't pick that up. Migration also sets up `ALTER DEFAULT PRIVILEGES` going forward so future tables don't need this fix.
 
-### Corpus pipeline (`packages/corpus/src/`)
+### `packages/core/src/db.ts` extended
 
-- `types.ts` — canonical types: `RawDocument` (scraper output), `NormalisedDocument` + `Section` (post-normalisation tree), `Chunk` (chunker output), `AreaOfLaw`, `IngestedDocumentResult`, `IngestionRunResult`.
-- `normaliser.ts` — HTML/plaintext → clean structured text. Cheerio-based DOM walk strips nav/script/style/aside/header/footer, builds a hierarchy of `Section` nodes from heading levels (h1–h6) for statutes, paragraph-list for judgments. `splitHeadingLabel('Section 12 — Confidentiality')` → `{ label: 'Section 12', heading: 'Confidentiality' }`. Pure functions, no IO.
-- `chunker.ts` — section-aware chunker. Walks the section tree depth-first, packs text into ~2000-char (≈500-token) chunks at section boundaries, falling back to paragraph → sentence → whitespace split for oversize sections. Each chunk's `textWithContext` field prefixes the hierarchy: `"Companies Act 2015 → Part III → Section 12 — Confidentiality: <text>"`. This is what gets embedded.
-- `embedder.ts` — Voyage-3 wrapper. Singleton client lazy-initialised from `VOYAGE_API_KEY`. `embedTexts()` batches in groups of 128 (Voyage hard cap). `embedChunks(chunks)` mutates each chunk's `embedding` field. `overrideEmbedderClient()` test hook.
-- `tagger.ts` — Haiku 4.5 tagger that returns `{clauseTypes, areaOfLaw}` for a chunk. Uses controlled vocabulary in `@parasol/core` (40 clause types + 12 areas of law). Output validated via Zod against the vocabulary (parsed-but-invalid responses become empty tags rather than throwing). `InMemoryTagCache` keyed by SHA256(text); persistent cache (Redis/Postgres) deferred to Sprint 4.
-- `repository.ts` — `CorpusRepository`: `listSources`, `getSourceBySlug`, `updateSourceStatus`, `createRun`, `completeRun`, `findLatestDocument`, `createDocument`, `markSuperseded`, `insertChunks` (auto-batched at 100 rows), `deleteChunksForDocument`. Lives in `@parasol/corpus` (not `@parasol/core`) because it's domain-specific.
-- `scrapers/types.ts` — `Scraper` interface (`slug`, `listAvailable`, `fetchDocument`) + `politeFetch()` helper (per-host minimum interval, default 2s, configurable for tests; identifies as "Parasol Corpus Ingestion" by default).
-- `scrapers/kenyalaw.ts` — `KenyaLawScraper` for kenyalaw.org. Sprint 1 fixture set: Constitution 2010, Data Protection Act 2019, Companies Act 2015, KICA 1998. URL pattern: `https://kenyalaw.org/akn/ke/act/<year>/<num>/eng`. Full enumeration of all Acts + judgments deferred to Sprint 4 (DEF-017 alongside scheduler).
-- `ingest.ts` — orchestrator: source → run → fetch → normalise → chunk → tag → embed → persist. Per-document try/catch so a single failure doesn't kill the whole run. Updates `corpus_sources.status` to `running → healthy/warning/error`. Idempotency: `skipUnchanged: true` byte-compares against the latest existing row's `full_text`. Re-ingestion supersedes (sets `superseded_at` + `superseded_by_id` on the prior version).
-- `cli/ingest-kenya.ts` — `pnpm --filter @parasol/corpus run ingest:kenya`. Reads `NEXT_PUBLIC_SUPABASE_URL` + `SUPABASE_SERVICE_ROLE_KEY` from env. Flags: `--limit=<n>`, `--skip-embedding`, `--skip-tagging`, `--skip-unchanged`. Streams per-document progress to stdout.
+- Added `Functions` to the `Database` type with typed Args/Returns for the two RPCs.
+- New exported types: `CorpusChunkSearchResult`, `CorpusChunkBm25Result`.
 
-### Tests added (49 new)
+### `packages/corpus/src/retrieval.ts` (new)
+
+- `retrieveAuthority(query, options, ctx)` — public API. Pipeline:
+  1. Embed the query in `inputType: 'query'` mode (matters for Voyage scoring)
+  2. BM25 + vector retrieval in parallel (BM25 doesn't depend on the embedding)
+  3. Reciprocal Rank Fusion merge (default `k=60` per the original RRF paper)
+  4. Optional Voyage rerank-2 on the top-30 RRF results (default on; bypass with `skipRerank: true`)
+  5. Return top K with `score`, `matchedVia: ['bm25' | 'dense']`, full chunk text + hierarchy + document metadata
+- `reciprocalRankFusion(bm25, vector, k)` — pure function, separately tested. Score = sum of `1 / (k + rank)` across rankings; items present in both rank higher.
+- `overrideVoyageClient()` test hook.
+- Sprint 1 limitation: single jurisdiction per call (RPC takes a `text` not `text[]`). Multi-jurisdiction queries take the first jurisdiction; documented for v2.
+
+### `packages/corpus/src/normaliser.ts` — AKN selector fix
+
+The smoke test revealed that on Kenya Law's AKN HTML rendering, `.akn-content` is a per-paragraph span (2,119 of them in the Constitution alone), not the document root. The normaliser was picking the first one and producing a single 996-char chunk for the entire Constitution. Fixed selector priority:
+
+```
+.akn-act → .akn-akomaNtoso → main → #content → .content → body
+```
+
+After fix: Constitution produces **158 chunks** (verified via live ingest with `--skip-embedding --skip-tagging`).
+
+### `packages/corpus/src/scrapers/kenyalaw.ts` — domain fix
+
+Smoke test 404'd on every URL because Kenya Law moved most legal content to `https://new.kenyalaw.org` in their 2024 redesign. The legacy `kenyalaw.org` is mostly informational pages now. Updated `DEFAULT_BASE` accordingly. Also added `redirect: 'follow'` to `politeFetch` because AKN URLs use point-in-time language qualifiers (e.g. `/eng@2022-12-31`) and the bare `/eng` 302s to the latest dated revision.
+
+## Tests added (14 new)
 
 | Suite | Tests |
 |-------|-------|
-| `normaliser.test.ts` | 11 — heading hierarchy, nav/script stripping, judgment paragraph split, plain-text labels, serialisation |
-| `chunker.test.ts` | 9 — paragraph/sentence/word splitting, hierarchy preservation, chunkIndex order, oversize section split, empty-sections fallback |
-| `tagger.test.ts` | 14 — content hash determinism, JSON parsing (fenced/prose-wrapped/invalid), vocabulary validation, in-memory cache hit/miss/key-by-text, batch tagging |
-| `embedder.test.ts` | 9 — empty-input short-circuit, single-batch, multi-batch ordering, SDK error → EmbeddingError, length-mismatch → EmbeddingError, model env precedence, embedChunks mutates in place, missing key error |
-| `scrapers/kenyalaw.test.ts` | 6 — fixture listing, limit, fetch happy path, 404 → null, 5xx → throw, fallback title extraction |
+| `retrieval.test.ts` | 14 — RRF (empty inputs, single-source ranking, dual-source boost, dense-only marker, custom k, sort order, field preservation), retrieveAuthority orchestration (end-to-end, topK trim, filter pass-through, skipRerank, no-jurisdiction error, RPC error, reranker-returns-null fallback) |
 
-Cumulative repo test count: **135 passing across 6 packages** (+49 today).
-
-### NDA golden dataset (`packages/eval/data/golden/nda/`)
-
-A background agent sourced 20 publicly-available NDAs (delegated because Tim has none in his personal network). All in `.gitignore` so files stay local.
-
-**Format mix**: 14 PDF + 6 DOCX (exceeds the ≥5/5 minimum, exercises both extraction code paths).
-
-**Subtype mix**: 7 real party-to-party signed (mutual), 4 real one-way, 4 mutual templates, 5 one-way templates.
-
-**Jurisdiction mix**: 14 US (mostly SEC EDGAR M&A and tender-offer exhibits — Calpine, NCR, Sybase, SuccessFactors, Cogent, Vocus, etc.), 4 UK (gov.uk publishing service, Dstl/MoD secondee NDA, National Archives), 2 Kenya (Britam supplier NDA — exactly the kind a customer would receive — and UN-Habitat Nairobi).
-
-**Sources**: SEC EDGAR full-text search API, Common Paper (CC-BY-4.0), gov.uk, UK National Archives, Britam Kenya, UN-Habitat. Some EDGAR HTML files were rendered to PDF via headless Chrome; some converted to DOCX via paragraph extraction. Manifest `manifest.yaml` lists filename, source_url, source_name, jurisdiction, subtype, parties, notes, size_bytes, sha256 per file.
-
-**Quality concerns** (to revisit on Day 6 when the eval harness runs):
-- `nda-009.pdf` is a Common Paper 2-page cover that links to online standard terms — most clauses live at the URL, not in the file. Useful as an edge case.
-- `nda-017.docx` (UN-Habitat) was extracted from an old OLE `.doc` via regex; text is clean but paragraph boundaries are heuristic.
-- Only 2/20 are Kenya-jurisdictional. The pipeline still exercises the playbook structurally; Kenya-specific outputs (jurisdictional violations, DPA references, KSh provisions) will trigger more strongly when Sprint 7+ broadens the dataset.
+Cumulative repo test count: **149 passing** (+14 today across 6 packages).
 
 ## Verification evidence
 
 ```
 pnpm turbo typecheck test lint
-→ 18 successful, 18 total (6 packages × 3 tasks)
-→ Zero TS errors, zero lint warnings
-→ 135 tests passing across all 6 packages
+→ 18 successful, 18 total
+→ Zero TS errors, zero lint warnings, 149 tests passing
+```
+
+Live smoke test results:
+```
+pnpm --filter @parasol/corpus run ingest:kenya -- --limit=1 --skip-embedding --skip-tagging
+→ 1 added, 0 updated, 0 errors
+→ Constitution of Kenya 2010 → 158 chunks
 ```
 
 ## What is NOT done
 
-- Live ingestion against real kenyalaw.org — the scraper interface and Kenya scraper are wired, but the seed run (`pnpm corpus:ingest:kenya`) hasn't been executed yet. Day 4 will run it for the fixture set as part of testing the retrieval function. Unblocked: the CLI is ready; just needs `NEXT_PUBLIC_SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` and a Voyage API call budget.
-- Hybrid retrieval (Day 4): `retrieveAuthority(query, options)` with BM25 + pgvector + RRF + Voyage rerank-2.
-- Full enumeration of kenyalaw.org sources (judgments, gazette, ODPC, KRA tribunal, CBK, CMA). Sprint 1 fixture: 4 statutes only. Multi-source enumeration deferred to Sprint 4 alongside the scheduler.
-- Persistent tag cache. In-memory only for now; Sprint 4 wires Redis or a Postgres table.
-- Eval harness. Lands Day 6.
-- Lawyer review of `packages/playbooks/kenya/nda.yaml` — needed by Day 5 (DEF-028).
-- Resend MX record for `ask.parasol.co.ke` — needed by Day 5 (Tim action, DEF-001).
+- **Live retrieval acceptance test (DPA s.49 in top 3)** — blocked by DEF-005 (Voyage rate limit). The `retrieveAuthority` code is complete and tested, but without embeddings populated (the 429 blocked the embed step), the dense leg returns nothing and the acceptance test is meaningless. Once Tim adds a payment method on Voyage, re-run the ingest without `--skip-embedding` and the acceptance test runs. Estimated unblock time: minutes, not hours.
+- Full ingestion of all 4 fixture statutes (Constitution + DPA 2019 + Companies Act 2015 + KICA 1998). Only the Constitution has been touched. Same blocker.
+- Persistent tag cache (Redis / Postgres) — Sprint 4.
+- Day 5 work: playbook validator + Resend email webhook.
 
-## Known issues / technical notes
+## DEFERRED.md updates
 
-- **Circular workspace dependency removed**: `@parasol/ai` had `@parasol/corpus` and `@parasol/playbooks` as deps from the original scaffold but didn't import either. Removing them broke a `turbo` cycle warning that surfaced when corpus added `@parasol/ai` as its tagger dep. AI now declares only `@parasol/core` and the SDKs. The orchestrator (Day 7+) will accept retrieval results as part of `OrchestratorContext.authorityChunks` rather than importing from corpus directly, preserving the acyclic structure.
-- **`domhandler` declared explicitly**: cheerio doesn't re-export DOM types. Added `domhandler` (already a transitive dep) to `packages/corpus/package.json` so `import type { AnyNode } from 'domhandler'` works.
-- **NBSP in regex**: had to escape an embedded U+00A0 in the cleanText regex as ` `. ESLint's `no-irregular-whitespace` flagged the literal byte.
-- **Tagger LLM call goes through `@parasol/ai`**, so it's behind the same singleton + caching infrastructure as future stage prompts. Means the tagger picks up any future client-level retry / observability we add.
+- **DEF-005 escalated** from `sprint:1 day 8` to `sprint:1 day 4`. Rewrote the entry with the actual rate-limit numbers (3 RPM / 10K TPM on free tier), the workaround (`--skip-embedding`), and clear remediation steps.
+- **DEF-045 added** — adaptive batching + 429-aware retry for the Voyage embedder. The right fix once Tim's account is upgraded; protects against future spikes during eval-suite runs (Sprint 6+).
 
 ## Database state
 
-Unchanged from Day 1. All 4 migrations remain applied. Day 4's retrieval work doesn't need new migrations.
+All 6 migrations applied to Supabase project `rfgcgvafxdbpypzaokdh` (eu-west-2 London). Migration history shows 0001-0006 in sync.
 
-## Exact next step (Day 4)
+```
+Local | Remote
+------|-------
+0001  | 0001  (foundation)
+0002  | 0002  (corpus tables)
+0003  | 0003  (reviews)
+0004  | 0004  (audit + hash chain)
+0005  | 0005  (corpus retrieval RPCs)         [new today]
+0006  | 0006  (explicit table grants)         [new today]
+```
 
-⚠️ **Day 5 deadlines approaching**: lawyer engagement for `kenya/nda.yaml` review (DEF-028) and Resend MX on `ask.parasol.co.ke` (DEF-001).
+corpus_documents has 1 row (Constitution); corpus_chunks has 158 rows (all with `embedding = null` — pending DEF-005).
 
-Day 4 goal: hybrid retrieval. The `retrieveAuthority` function must pass the DPA s.49 test before Day 5.
+## Known issues / technical notes
 
-1. **`packages/corpus/src/retrieval.ts`** — `retrieveAuthority(query, options)` with:
-   - BM25 via Postgres FTS (`ts_rank_cd`)
-   - Dense retrieval via pgvector cosine similarity (HNSW index already in place from migration 0002)
-   - Reciprocal rank fusion to merge BM25 and dense rankings
-   - Voyage rerank-2 on top-30 RRF results
-   - Clause-type + jurisdiction filters at retrieval time
-2. **`packages/corpus/src/retrieval.test.ts`** — integration test asserting "data protection cross-border transfer" returns DPA 2019 s.49 in top 3.
-3. **`pnpm corpus:ingest:kenya` smoke test** — actually run the seed ingestion against dev Supabase. Should fetch the 4 fixture statutes, normalise, chunk, embed (this will use Voyage budget), tag (Haiku), and write to corpus_documents + corpus_chunks. Verify chunk count in Supabase dashboard.
+- The chunker fix (AKN root selector) is generic Kenya-Law-statute-specific. Other Kenyan source types (judgments, ODPC determinations, gazette) will likely have their own selectors when scraping for them lands in Sprint 4. The current normaliser falls through to `main`/`#content`/`.content`/`body` for non-AKN content, so it shouldn't completely fail on other sources — just produce non-ideal chunks.
+- Once Voyage is upgraded and ingestion runs cleanly, expect the Constitution alone to consume ~80K tokens of embedding budget. Four fixture statutes ≈ 250-400K tokens total. Voyage's 200M-token free quota easily covers this.
+- The retrieval RPCs use `<=>` (cosine distance) and `1 - <=>` for similarity. Make sure new code reading `similarity` interprets it as "higher is more similar" (matches our score convention).
 
-Day 4 has no Tim action items. Day 5 is the next one (lawyer + Resend MX).
+## Exact next step (Day 5) ⚠️ TWO TIM ACTIONS
+
+1. **Lawyer engagement for `packages/playbooks/kenya/nda.yaml` review (DEF-028)** — start the conversation now even if review takes longer than Day 5. Sprint 1's playbook acceptance criterion is gated on this.
+2. **Resend "Enable Receiving" + MX record on `ask.parasol.co.ke` at 101domain (DEF-001)** — needed for the email-intake route handler that lands today.
+3. **(High priority but flexible)** Add a payment method on Voyage AI dashboard (DEF-005). Without it, Day 6 (eval harness) will hit the same rate limit and won't be able to score retrieval against the 20-NDA dataset.
+
+Day 5 implementation work I'll do (in parallel with Tim's actions):
+1. **`packages/playbooks/src/schema.ts`** — Zod schema matching `docs/playbook-schema.md`, validating all required fields and citation resolution.
+2. **`packages/playbooks/src/validator.ts`** — `validatePlaybook(path)` loads YAML + schema-validates + checks every citation id resolves in the corpus.
+3. **`packages/playbooks/src/loader.ts`** — `loadPlaybook(jurisdiction, contractType)` returning typed `PlaybookDefinition`.
+4. **`pnpm playbooks:validate`** wired and passing on `kenya/nda.yaml` (modulo DEF-028 placeholders, which fail with clear error messages).
+5. **`apps/web/src/app/api/inbound/email/route.ts`** — Resend webhook handler with Svix signature verification, sender domain whitelist, attachment extraction, returns 200 immediately and queues a pipeline run.

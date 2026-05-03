@@ -68,6 +68,7 @@ export async function politeFetch(
     const res = await fetch(url, {
       headers: { 'User-Agent': userAgent, Accept: 'text/html, application/xhtml+xml, application/xml, text/plain;q=0.9, */*;q=0.8' },
       signal: controller.signal,
+      redirect: 'follow',
     })
     const body = await res.text()
     return {

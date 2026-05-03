@@ -307,8 +307,54 @@ export type Database = {
       }
     }
     Views: Record<string, never>
-    Functions: Record<string, never>
+    Functions: {
+      // migration 0005 — corpus retrieval RPCs
+      match_corpus_chunks: {
+        Args: {
+          query_embedding: number[]
+          match_count?: number
+          jurisdiction_filter?: string | null
+          source_type_filter?: string[] | null
+          clause_types_filter?: string[] | null
+        }
+        Returns: CorpusChunkSearchResult[]
+      }
+      bm25_corpus_chunks: {
+        Args: {
+          query_text: string
+          match_count?: number
+          jurisdiction_filter?: string | null
+          source_type_filter?: string[] | null
+          clause_types_filter?: string[] | null
+        }
+        Returns: CorpusChunkBm25Result[]
+      }
+    }
     Enums: Record<string, never>
     CompositeTypes: Record<string, never>
   }
+}
+
+// Return shape for match_corpus_chunks RPC.
+export type CorpusChunkSearchResult = {
+  id: string
+  document_id: string
+  chunk_index: number
+  hierarchy: string[]
+  text: string
+  text_with_context: string
+  clause_types: string[]
+  area_of_law: string[]
+  similarity: number
+  document_canonical_id: string
+  document_title: string
+  document_source_type: string
+  document_jurisdiction: string
+  document_source_url: string
+}
+
+// Return shape for bm25_corpus_chunks RPC. Same shape as the vector search,
+// but the score column is `rank` (Postgres ts_rank_cd) instead of `similarity`.
+export type CorpusChunkBm25Result = Omit<CorpusChunkSearchResult, 'similarity'> & {
+  rank: number
 }

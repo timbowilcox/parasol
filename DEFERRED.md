@@ -59,10 +59,13 @@ If a deferred item is completed, move it to the **Completed** section at the bot
 - **Whose action**: Tim (manual check). Add to release runbook.
 - **Claude Code role**: Block production release until Tim confirms.
 
-#### DEF-005: Voyage AI — confirm rerank-2 quota before Sprint 1 closes
-- **Trigger**: `sprint:1 day 8`
-- **What**: Check Voyage AI dashboard for monthly rerank-2 usage. Eval suite runs against 20 NDAs, each retrieval reranks ~30 chunks; sprint 1 should consume well under free tier. If projected v1 launch usage exceeds free tier, upgrade plan during Sprint 7.
-- **Whose action**: Tim (read dashboard), Claude Code (calculate projected usage from eval logs)
+#### DEF-005: Voyage AI — add payment method to lift free-tier rate limits
+- **Trigger**: `sprint:1 day 4` (escalated from day 8 — confirmed blocking on day 4)
+- **What**: Tim's Voyage account has no payment method, so it's on the free tier with hard caps of **3 requests per minute** and **10K tokens per minute** for embeddings. The Sprint 1 day-4 corpus ingest smoke test hit a 429 on the very first batch (the Constitution alone produces 158 chunks ≈ 80K tokens, far above 10K TPM). Add a payment method at https://dashboard.voyageai.com/ to unlock standard limits — the 200M free-token quota still applies after adding a card, so the immediate marginal cost is $0. Then re-run `pnpm --filter @parasol/corpus run ingest:kenya` (no flags) to populate corpus_chunks with embeddings, after which the day-4 acceptance test (DPA s.49 in top 3 retrievals) can run.
+- **Why escalated**: Without embeddings, dense retrieval returns nothing and `retrieveAuthority` falls back to BM25-only — which is workable for keyword queries but fails the day-4 acceptance criterion that explicitly tests semantic retrieval.
+- **Workaround if Tim cannot add a card immediately**: Pass `--skip-embedding` to ingest. Chunks land with `embedding = null`, BM25 still indexes them via the generated `fts` column, and BM25-only retrieval works. The acceptance bar is not met but the rest of Sprint 1 can proceed.
+- **Whose action**: Tim (add card on Voyage dashboard); Claude Code (re-run ingest, run acceptance test)
+- **Original Day 8 task** (still relevant): once embeddings are flowing, calculate projected v1-launch usage from eval logs and decide if the standard plan is sufficient or if Sprint 7 needs a paid tier upgrade.
 
 #### DEF-006: Stripe — activate live account and configure tax handling
 - **Trigger**: `sprint:3 day 1`
@@ -279,6 +282,12 @@ Path A architecture means Parasol is a US-incorporated SaaS selling cross-border
 - **Trigger**: `sprint:5` OR `condition:concurrent-audit-write-detected`
 - **What**: `AuditRepository.appendEvent` currently uses a read-then-write pattern (read latest hash, compute new hash, insert). Two concurrent appends to the same workspace can race and produce two rows with the same `previous_hash`, breaking strict chain integrity. Add a new migration that defines `public.append_audit_event(...)` as a `security definer` plpgsql function which `SELECT ... FOR UPDATE`s the latest row inside a transaction, computes the hash server-side using `pgcrypto.digest`, and inserts atomically. Update `AuditRepository.appendEvent` to call the RPC instead of doing the read-then-write in the app layer. Keep `computeChainHash` and `verifyChain` in TypeScript for offline verification.
 - **Why deferred**: Sprint 1 audit volume is low (one event per review create + complete + admin action). Race conditions are extremely unlikely. Sprint 5 ships the audit log UI and that's when chain integrity needs to be bulletproof for the customer-facing surface.
+- **Whose action**: Claude Code
+
+#### DEF-045: Voyage embedder — adaptive batching with 429-aware retry
+- **Trigger**: `sprint:6 day 1` OR `condition:running-full-eval-on-shared-account`
+- **What**: `packages/corpus/src/embedder.ts` currently sends the full configured `batchSize` (default 128) without any rate-limit awareness. On Voyage's free tier this 429s instantly; on the paid tier it can still spike. Add: (a) a configurable `inter-batch-delay-ms` option, (b) automatic retry-with-exponential-backoff on 429 responses (read `retry-after` header if present), (c) auto-reduce batch size on repeated 429s within a single run. Wire equivalent flags to the ingest CLI (`--batch-size`, `--inter-batch-delay-ms`). Same shape will apply to the rerank call once Day 4's retrieval is exercised heavily by the eval suite.
+- **Why deferred**: Sprint 1 day-4 smoke test surfaced the limit but didn't need to fix it inline — the right fix is Tim adding a payment method (DEF-005). Adaptive batching is real engineering value once we're running the eval suite (Day 6+) and don't want a single 429 to fail a 200-document run.
 - **Whose action**: Claude Code
 
 ### Payments

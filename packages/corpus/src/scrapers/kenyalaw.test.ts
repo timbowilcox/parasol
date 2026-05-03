@@ -46,7 +46,7 @@ describe('KenyaLawScraper.listAvailable', () => {
 describe('KenyaLawScraper.fetchDocument', () => {
   it('returns a RawDocument for a known id', async () => {
     mockFetch({
-      'https://kenyalaw.org/akn/ke/act/2019/24/eng': {
+      'https://new.kenyalaw.org/akn/ke/act/2019/24/eng': {
         status: 200,
         body: '<html><body><main><h1>Data Protection Act</h1><p>Be it enacted...</p></main></body></html>',
       },
@@ -65,7 +65,7 @@ describe('KenyaLawScraper.fetchDocument', () => {
 
   it('returns null on 404', async () => {
     mockFetch({
-      'https://kenyalaw.org/akn/ke/act/9999/99/eng': {
+      'https://new.kenyalaw.org/akn/ke/act/9999/99/eng': {
         status: 404,
         body: 'Not Found',
       },
@@ -77,7 +77,7 @@ describe('KenyaLawScraper.fetchDocument', () => {
 
   it('throws CorpusError on 5xx', async () => {
     mockFetch({
-      'https://kenyalaw.org/akn/ke/act/2019/24/eng': {
+      'https://new.kenyalaw.org/akn/ke/act/2019/24/eng': {
         status: 503,
         body: 'Service Unavailable',
       },
@@ -88,7 +88,7 @@ describe('KenyaLawScraper.fetchDocument', () => {
 
   it('uses extracted title for non-fixture ids', async () => {
     mockFetch({
-      'https://kenyalaw.org/akn/ke/act/2099/99/eng': {
+      'https://new.kenyalaw.org/akn/ke/act/2099/99/eng': {
         status: 200,
         body: '<html><head><title>Some Future Act, 2099</title></head><body>...</body></html>',
       },
