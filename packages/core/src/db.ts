@@ -90,6 +90,132 @@ export type ReviewInsert = {
 }
 export type ReviewUpdate = Partial<ReviewInsert>
 
+// ─── corpus tables (migration 0002) ──────────────────────────────────────────
+
+export type CorpusSourceRow = {
+  id: string
+  slug: string
+  name: string
+  jurisdiction: string
+  source_type: string
+  base_url: string
+  schedule_display: string | null
+  status: 'idle' | 'running' | 'healthy' | 'warning' | 'error'
+  last_run_at: string | null
+  document_count: number
+  created_at: string
+  updated_at: string
+}
+export type CorpusSourceInsert = {
+  id?: string
+  slug: string
+  name: string
+  jurisdiction: string
+  source_type: string
+  base_url: string
+  schedule_display?: string | null
+  status?: 'idle' | 'running' | 'healthy' | 'warning' | 'error'
+  last_run_at?: string | null
+  document_count?: number
+  created_at?: string
+  updated_at?: string
+}
+export type CorpusSourceUpdate = Partial<CorpusSourceInsert>
+
+export type CorpusIngestionRunRow = {
+  id: string
+  source_id: string
+  triggered_by: string | null
+  started_at: string
+  completed_at: string | null
+  status: 'running' | 'completed' | 'failed'
+  documents_processed: number
+  documents_added: number
+  documents_updated: number
+  errors: Json
+  created_at: string
+}
+export type CorpusIngestionRunInsert = {
+  id?: string
+  source_id: string
+  triggered_by?: string | null
+  started_at?: string
+  completed_at?: string | null
+  status?: 'running' | 'completed' | 'failed'
+  documents_processed?: number
+  documents_added?: number
+  documents_updated?: number
+  errors?: Json
+  created_at?: string
+}
+export type CorpusIngestionRunUpdate = Partial<CorpusIngestionRunInsert>
+
+export type CorpusDocumentRow = {
+  id: string
+  source_id: string | null
+  source_type: string
+  jurisdiction: string
+  canonical_id: string
+  title: string
+  full_text: string
+  source_url: string
+  retrieved_at: string
+  effective_date: string | null
+  superseded_at: string | null
+  superseded_by_id: string | null
+  metadata: Json
+  created_at: string
+}
+export type CorpusDocumentInsert = {
+  id?: string
+  source_id?: string | null
+  source_type: string
+  jurisdiction: string
+  canonical_id: string
+  title: string
+  full_text: string
+  source_url: string
+  retrieved_at: string
+  effective_date?: string | null
+  superseded_at?: string | null
+  superseded_by_id?: string | null
+  metadata?: Json
+  created_at?: string
+}
+export type CorpusDocumentUpdate = Partial<CorpusDocumentInsert>
+
+export type CorpusChunkRow = {
+  id: string
+  document_id: string
+  parent_chunk_id: string | null
+  chunk_index: number
+  hierarchy: string[]
+  text: string
+  text_with_context: string
+  clause_types: string[]
+  area_of_law: string[]
+  embedding: number[] | null
+  // fts is generated always — never write to it; readable as string for completeness
+  fts: unknown
+  created_at: string
+}
+export type CorpusChunkInsert = {
+  id?: string
+  document_id: string
+  parent_chunk_id?: string | null
+  chunk_index: number
+  hierarchy?: string[]
+  text: string
+  text_with_context: string
+  clause_types?: string[]
+  area_of_law?: string[]
+  embedding?: number[] | null
+  created_at?: string
+}
+export type CorpusChunkUpdate = Partial<CorpusChunkInsert>
+
+// ─── audit_log (migration 0004) ──────────────────────────────────────────────
+
 export type AuditLogRow = {
   id: string
   workspace_id: string | null
@@ -147,6 +273,30 @@ export type Database = {
         Row: ReviewRow
         Insert: ReviewInsert
         Update: ReviewUpdate
+        Relationships: []
+      }
+      corpus_sources: {
+        Row: CorpusSourceRow
+        Insert: CorpusSourceInsert
+        Update: CorpusSourceUpdate
+        Relationships: []
+      }
+      corpus_ingestion_runs: {
+        Row: CorpusIngestionRunRow
+        Insert: CorpusIngestionRunInsert
+        Update: CorpusIngestionRunUpdate
+        Relationships: []
+      }
+      corpus_documents: {
+        Row: CorpusDocumentRow
+        Insert: CorpusDocumentInsert
+        Update: CorpusDocumentUpdate
+        Relationships: []
+      }
+      corpus_chunks: {
+        Row: CorpusChunkRow
+        Insert: CorpusChunkInsert
+        Update: CorpusChunkUpdate
         Relationships: []
       }
       audit_log: {

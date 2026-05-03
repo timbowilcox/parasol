@@ -1,0 +1,203 @@
+# Parasol NDA golden eval dataset — manifest
+# Generated automatically; see assemble.py for provenance.
+# All files are publicly sourced; see source_url for each entry.
+
+- filename: nda-001.pdf
+  source_url: https://www.sec.gov/Archives/edgar/data/916457/000091645714000028/exhibit104-confidentiality.htm
+  source_name: "SEC EDGAR — Calpine Corp 8-K filing 2014, Exhibit 10.4"
+  jurisdiction: us
+  contract_subtype: mutual
+  parties: ["Calpine Corporation", "Counterparty (LS Power)"]
+  notes: "Real signed confidentiality and non-disclosure agreement filed as exhibit to M&A 8-K, dated 2014-02-19."
+  size_bytes: 144690
+  sha256: 5726fa60d88a3428707b0e6c340b6542533553f3b4ce25387c46e9c92caa48ff
+
+- filename: nda-002.pdf
+  source_url: https://www.sec.gov/Archives/edgar/data/70866/000095015714001220/ex99-2.htm
+  source_name: "SEC EDGAR — NCR Corp 14D-9 filing 2014"
+  jurisdiction: us
+  contract_subtype: one-way
+  parties: ["NCR Corporation", "Counterparty"]
+  notes: "Confidentiality agreement filed as part of NCR Corp tender-offer disclosures; relatively long."
+  size_bytes: 229965
+  sha256: af3c395df7900c5ed9b7abed91f051fdd6a28ed88547cc85c834ce3ed71bfef1
+
+- filename: nda-003.pdf
+  source_url: https://www.sec.gov/Archives/edgar/data/1283709/000119312508191224/dex103.htm
+  source_name: "SEC EDGAR — Thomas Properties Group 8-K 2008, Exhibit 10.3"
+  jurisdiction: us
+  contract_subtype: mutual
+  parties: ["Thomas Properties Group, Inc.", "Counterparty"]
+  notes: "Confidentiality and non-disclosure agreement, real estate context."
+  size_bytes: 130369
+  sha256: 137026d651e665cdcc908a090bfed94d62ab36c9a91cd13ac5662eef3d185e88
+
+- filename: nda-004.pdf
+  source_url: https://www.sec.gov/Archives/edgar/data/1424657/000121390016016691/f8k082516ex99iii_nextgroup.htm
+  source_name: "SEC EDGAR — Next Group Holdings 8-K 2016, Exhibit 99(iii)"
+  jurisdiction: us
+  contract_subtype: mutual
+  parties: ["Next Group Holdings, Inc.", "Counterparty"]
+  notes: "Mutual non-disclosure agreement, M&A context."
+  size_bytes: 122618
+  sha256: cca14bf94a75436f0063c85bb999add80090d666e03e1e3a80a4913e3245cad4
+
+- filename: nda-005.pdf
+  source_url: https://www.sec.gov/Archives/edgar/data/768262/000119312510128597/dex99d2.htm
+  source_name: "SEC EDGAR — Sybase Inc 14D-9 filing 2010"
+  jurisdiction: us
+  contract_subtype: mutual
+  parties: ["Sybase, Inc.", "SAP AG"]
+  notes: "Mutual NDA filed as part of SAP acquisition tender offer."
+  size_bytes: 145514
+  sha256: 9769d7c562efa3e5ec3833cc786abb36a8b04649a39ca6c33993f5b09f90706b
+
+- filename: nda-006.pdf
+  source_url: https://www.sec.gov/Archives/edgar/data/1402305/000119312511343865/d268167dex99d2.htm
+  source_name: "SEC EDGAR — SuccessFactors 14D-9 filing 2011"
+  jurisdiction: us
+  contract_subtype: mutual
+  parties: ["SuccessFactors, Inc.", "SAP AG"]
+  notes: "Mutual NDA filed as part of SAP acquisition tender offer."
+  size_bytes: 129657
+  sha256: a47296a6dc2523e40a64c58b9ba723f8841841a48a31ff35b93a9cf614f0250e
+
+- filename: nda-007.pdf
+  source_url: https://www.sec.gov/Archives/edgar/data/1289434/000119312510208203/dex99e3.htm
+  source_name: "SEC EDGAR — Cogent Inc 14D-9 filing 2010"
+  jurisdiction: us
+  contract_subtype: one-way
+  parties: ["Cogent, Inc.", "3M Company"]
+  notes: "Non-disclosure agreement filed as part of 3M acquisition."
+  size_bytes: 183839
+  sha256: ec509add41c3b82eb5ef0ee93aa395122f81166bdf592596e926596249eb9290
+
+- filename: nda-008.pdf
+  source_url: https://www.sec.gov/Archives/edgar/data/1329919/000119312514149149/d701401dex99d6.htm
+  source_name: "SEC EDGAR — Vocus Inc 14D-9 filing 2014"
+  jurisdiction: us
+  contract_subtype: mutual
+  parties: ["Vocus, Inc.", "GTCR / Acquirer"]
+  notes: "Non-disclosure agreement filed as part of acquisition."
+  size_bytes: 241644
+  sha256: c42c1d183ad6c0aed6723cc369f79b120b78249ffc3fb6eb6c9c9db16935c3e5
+
+- filename: nda-009.pdf
+  source_url: https://commonpaper.com/wp-content/uploads/2021/12/Mutual-NDA-public-2page.pdf
+  source_name: "Common Paper — Mutual NDA template (public v1, 2-page cover format)"
+  jurisdiction: us-delaware
+  contract_subtype: mutual-template
+  parties: ["template"]
+  notes: "Open-source mutual NDA template used by 2,000+ companies. CC BY 4.0. Cover page format references online standard terms."
+  size_bytes: 621567
+  sha256: 8d31fe0e0eb96649b180ec4f6eec84617ff2d499576f8dccde981e58c5a829d6
+
+- filename: nda-010.pdf
+  source_url: https://assets.publishing.service.gov.uk/media/5a8188fd40f0b62302697d5e/Example-Mutual-Non-Disclosure-Agreement.pdf
+  source_name: "UK gov.uk — Example Mutual Non-Disclosure Agreement"
+  jurisdiction: uk
+  contract_subtype: mutual-template
+  parties: ["template"]
+  notes: "UK government published example mutual NDA. Short/clean structure."
+  size_bytes: 17771
+  sha256: bbec9c3638a4cdf8f2bb9da889057d94e6da9481d7ed202bfcab2bcde37b32bb
+
+- filename: nda-011.pdf
+  source_url: https://assets.publishing.service.gov.uk/media/5a74d42140f0b65c0e844ccb/Example-One-Way-Non-Disclosure-Agreement.pdf
+  source_name: "UK gov.uk — Example One-Way Non-Disclosure Agreement"
+  jurisdiction: uk
+  contract_subtype: one-way-template
+  parties: ["template"]
+  notes: "UK government published example unilateral NDA."
+  size_bytes: 18790
+  sha256: 77823dcf8702d10508e2b079b837003e060c063acdf08d7ae01c29cbb668a620
+
+- filename: nda-012.pdf
+  source_url: https://assets.publishing.service.gov.uk/media/5a7f96ceed915d74e33f75ca/20150707___DSC_CDE_Secondee_Official_V5.0_FINAL_BLANK.pdf
+  source_name: "UK Defence Science and Technology Laboratory (Dstl) — NDA template"
+  jurisdiction: uk
+  contract_subtype: one-way-template
+  parties: ["template — UK Ministry of Defence Dstl"]
+  notes: "Government defence-context NDA. Multi-page, more clauses than the gov.uk examples; deeply non-standard for commercial use (CDE secondee context)."
+  size_bytes: 94855
+  sha256: 13fc2d2628a056974cbe545cbfbf566e70d7924407d835034a288601b7f0907c
+
+- filename: nda-013.pdf
+  source_url: https://ke.britam.com/images/forms/suppliers/Britam%20Non%20Disclosure%20Agreement.pdf
+  source_name: "Britam (Kenya) — Supplier Non-Disclosure Agreement"
+  jurisdiction: kenya
+  contract_subtype: one-way
+  parties: ["Britam Holdings PLC", "Supplier (template)"]
+  notes: "Kenyan-jurisdiction NDA published by Britam (Kenyan insurer) for use with suppliers. Real Kenyan ICP-style document."
+  size_bytes: 373075
+  sha256: 18f496e9372a338ed0737f274feb118ef76ba4978dbf6a07aaae45275b7def58
+
+- filename: nda-014.pdf
+  source_url: https://cdn.nationalarchives.gov.uk/documents/non-disclosure-agreement-template.pdf
+  source_name: "The National Archives (UK) — Non-Disclosure Agreement template"
+  jurisdiction: uk
+  contract_subtype: one-way-template
+  parties: ["template — The National Archives"]
+  notes: "Real UK public-body NDA template. Multiple pages."
+  size_bytes: 150113
+  sha256: 719d2172f35bbef14b5a7fc822d9e21e52e8004461f17935572ba3a9e63b471b
+
+- filename: nda-015.docx
+  source_url: https://commonpaper.com/wp-content/uploads/2021/12/Mutual-NDA-public-v1.docx
+  source_name: "Common Paper — Mutual NDA template (public v1, DOCX)"
+  jurisdiction: us-delaware
+  contract_subtype: mutual-template
+  parties: ["template"]
+  notes: "DOCX form of the Common Paper Mutual NDA. Editable, CC BY 4.0."
+  size_bytes: 22910
+  sha256: 68a65153fcdc00887d100991d762c907ebd54df8f7a5d3c0a01618c740480235
+
+- filename: nda-016.docx
+  source_url: https://commonpaper.com/wp-content/uploads/2025/01/Common-Paper-One-way-NDA.docx
+  source_name: "Common Paper — One-Way NDA template (DOCX)"
+  jurisdiction: us-delaware
+  contract_subtype: one-way-template
+  parties: ["template"]
+  notes: "DOCX form of the Common Paper One-Way NDA. Editable, CC BY 4.0."
+  size_bytes: 28912
+  sha256: d67a7a982e7832df1950787df7c1a2dd449d8de16a3340daede4bf9c67f7b70f
+
+- filename: nda-017.docx
+  source_url: https://habnet.unhabitat.org/sites/default/files/documents/02.04.2020_Final_Template_Non-Disclosure-Agreement%20(2).doc
+  source_name: "UN-Habitat (Nairobi HQ) — Two-Way Confidentiality NDA template"
+  jurisdiction: kenya
+  contract_subtype: mutual-template
+  parties: ["template — UN-Habitat"]
+  notes: "Originally a .doc file from UN-Habitat (HQ in Nairobi); converted to DOCX via text-extraction heuristic. Useful as a non-Kenyan-government but Kenya-headquartered org template."
+  size_bytes: 41440
+  sha256: 6c8af2fa45b399b24fbfdd01c275d3a4d15de0adb9209009cebab1ff50c16a02
+
+- filename: nda-018.docx
+  source_url: https://www.sec.gov/Archives/edgar/data/854222/000119312509002630/dex99e4.htm
+  source_name: "SEC EDGAR — Indevus Pharmaceuticals 14D-9 filing 2009"
+  jurisdiction: us
+  contract_subtype: one-way
+  parties: ["Indevus Pharmaceuticals, Inc.", "Endo Pharmaceuticals"]
+  notes: "Form of confidentiality agreement filed as part of Endo acquisition. Converted from EDGAR HTML to DOCX."
+  size_bytes: 42424
+  sha256: 838b45b401114dd39b0c6e980f259a0295a7121b55a527b627fdf980bde08062
+
+- filename: nda-019.docx
+  source_url: https://www.sec.gov/Archives/edgar/data/1170010/000091664102000770/dex1010.htm
+  source_name: "SEC EDGAR — CarMax Inc S-1 filing 2002, Exhibit 10.10"
+  jurisdiction: us-virginia
+  contract_subtype: one-way-template
+  parties: ["CarMax, Inc.", "Counterparty (form)"]
+  notes: "Form of confidentiality agreement from CarMax S-1. Converted from EDGAR HTML to DOCX."
+  size_bytes: 40931
+  sha256: 51c60fe5f27b168833e528f37d18cc132d43e18481b77db615d6d33bc17c531a
+
+- filename: nda-020.docx
+  source_url: https://www.sec.gov/Archives/edgar/data/1111697/000091142005000055/e1025808.txt
+  source_name: "SEC EDGAR — DOBI Medical International 8-K 2005, Exhibit 10.1"
+  jurisdiction: us
+  contract_subtype: mutual
+  parties: ["DOBI Medical International, Inc.", "Counterparty"]
+  notes: "Plain-text SGML EDGAR filing of confidentiality and non-disclosure agreement; converted to DOCX. Tests text-only extraction path."
+  size_bytes: 41276
+  sha256: c9bf484171fdc1e6a16107bad732ed32d132cf4259a90502c42494140abc2dc4
