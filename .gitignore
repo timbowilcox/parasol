@@ -1,0 +1,56 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+.pnp.*
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+.turbo/
+
+# Environment
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Editor
+.vscode/*
+!.vscode/extensions.json
+!.vscode/settings.json.shared
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Coverage
+coverage/
+*.lcov
+.nyc_output/
+
+# Testing
+.vitest/
+
+# Eval (encrypted with git-crypt; raw plaintext never committed)
+packages/eval/data/golden/**/*.docx
+packages/eval/data/golden/**/*.pdf
+packages/eval/data/intake-fixtures/**/*.docx
+packages/eval/data/intake-fixtures/**/*.pdf
+packages/eval/results/run-*.json
+
+# Misc
+.turbo/
+.cache/
+*.tsbuildinfo
+next-env.d.ts

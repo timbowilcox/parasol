@@ -1,0 +1,32 @@
+{
+  "name": "parasol",
+  "version": "0.0.1",
+  "private": true,
+  "description": "AI legal copilot for in-house counsel and finance leaders across East Africa",
+  "engines": {
+    "node": ">=22.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.12.0",
+  "scripts": {
+    "dev": "turbo run dev --parallel",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "typecheck": "turbo run typecheck",
+    "lint": "turbo run lint",
+    "format": "prettier --write \"**/*.{ts,tsx,md,yaml,json}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,yaml,json}\"",
+    "eval": "pnpm --filter @parasol/eval run eval",
+    "eval:report": "pnpm --filter @parasol/eval run report",
+    "eval:diff": "pnpm --filter @parasol/eval run diff",
+    "playbooks:validate": "pnpm --filter @parasol/playbooks run validate",
+    "corpus:ingest:kenya": "pnpm --filter @parasol/corpus run ingest:kenya",
+    "db:migrate": "pnpm --filter @parasol/web run db:migrate",
+    "clean": "turbo run clean && rm -rf node_modules"
+  },
+  "devDependencies": {
+    "prettier": "^3.3.0",
+    "turbo": "^2.1.0",
+    "typescript": "^5.6.0"
+  }
+}

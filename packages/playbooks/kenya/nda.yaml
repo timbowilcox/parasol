@@ -1,0 +1,238 @@
+# Kenya — Non-Disclosure Agreement Playbook
+#
+# IMPORTANT: This file is a STRUCTURAL EXAMPLE only. It demonstrates the schema and
+# illustrates clause coverage. Per DEF-028 in DEFERRED.md, the actual production
+# playbook must be authored and reviewed by external Kenyan corporate counsel
+# before Sprint 1 acceptance criteria can be ticked. Hard deadline: Sprint 1 day 5.
+#
+# The standard, fallback, and hard-limit positions below are reasonable starting
+# points but have NOT been validated by counsel. Do not treat as production.
+
+schema_version: "1.0"
+jurisdiction: kenya
+contract_type: nda
+display_name: "Non-Disclosure Agreement"
+description: "Mutual or one-way NDA, typical commercial confidentiality."
+applicable_industries: [all]
+authored_by: "PLACEHOLDER — pending DEF-028 lawyer review"
+reviewed_at: null
+language: en
+last_updated: "2026-05-03"
+
+clauses:
+  - id: confidentiality_term
+    display_name: "Term of confidentiality"
+    aliases: ["term", "duration of obligation", "period of confidentiality"]
+    importance: critical
+    standard:
+      position: "Confidentiality obligations survive for three years from the date of disclosure."
+      rationale: "Aligns with Kenya commercial market norm for non-trade-secret confidential information."
+    fallback:
+      position: "Two years from disclosure."
+      rationale: "Acceptable where counterparty's standard is shorter and information is genuinely time-sensitive."
+    hard_limit:
+      position: "One year from disclosure, OR perpetual obligation limited to bona fide trade secrets."
+      rationale: "Below 1 year, the obligation is commercially meaningless. Trade secret carve-out for indefinite protection of information that genuinely qualifies."
+    citations:
+      - source: market-norm
+        id: "parasol-internal-2026q1"
+        note: "Internal review of 200+ Kenya NDAs Q1 2026 (PLACEHOLDER — pending counsel validation)."
+
+  - id: definition_of_confidential_information
+    display_name: "Definition of confidential information"
+    aliases: ["confidential information", "definition", "scope"]
+    importance: critical
+    standard:
+      position: "Information disclosed in writing or orally, marked or identified as confidential at time of disclosure or within 14 days thereafter, OR information that a reasonable person would understand to be confidential given the nature and circumstances of disclosure."
+      rationale: "Balances marking discipline with commercial reality that not all confidential disclosures are formally marked."
+    fallback:
+      position: "Information marked confidential, or identified as confidential at the time of disclosure, with a 7-day cure period for oral disclosures to be confirmed in writing."
+      rationale: "Tighter marking discipline acceptable where counterparty insists; 7-day window preserves practicality."
+    hard_limit:
+      position: "Information must be marked confidential at time of disclosure with no cure period for oral disclosures."
+      rationale: "Below this, oral disclosures lose protection entirely; commercially impractical for most transactions."
+    citations: []
+
+  - id: exclusions_from_confidentiality
+    display_name: "Exclusions from confidential information"
+    aliases: ["carve-outs", "exceptions", "permitted disclosures"]
+    importance: material
+    standard:
+      position: "Excludes information that: (a) is or becomes public other than through breach; (b) was known to recipient before disclosure without confidentiality obligation; (c) is independently developed without use of disclosed information; (d) is rightfully received from a third party not under confidentiality obligation; (e) is required to be disclosed by law, court order, or regulator, with prior notice where lawful."
+      rationale: "Standard market position. Each exclusion is necessary; over-broad exclusions undermine the agreement."
+    fallback:
+      position: "Same as standard, but legal-disclosure exception requires both prior notice (where lawful) AND cooperation in seeking protective order at disclosing party's expense."
+      rationale: "Acceptable concession where counterparty raises specific regulatory concerns."
+    hard_limit:
+      position: "Standard exclusions (a)-(e) above; no narrower carve-outs accepted."
+      rationale: "Removing any standard exclusion creates traps for ordinary business activity."
+    citations: []
+
+  - id: return_or_destruction
+    display_name: "Return or destruction of confidential information"
+    aliases: ["return", "destruction", "post-termination obligations"]
+    importance: material
+    standard:
+      position: "Upon written request or termination, recipient returns or destroys confidential information within 30 days, certifies destruction in writing, and may retain one archival copy for legal/regulatory compliance and to enforce the agreement."
+      rationale: "Standard market position. Archival exception is practical necessity."
+    fallback:
+      position: "Same as standard but with 14-day return/destruction window."
+      rationale: "Tighter window acceptable where counterparty has specific compliance driver."
+    hard_limit:
+      position: "Return or destruction within 60 days; archival retention permitted for backup systems where deletion is technically impractical, with continued confidentiality obligation."
+      rationale: "Below 60 days is operationally difficult for organisations with backup systems."
+    citations: []
+
+  - id: governing_law
+    display_name: "Governing law"
+    aliases: ["choice of law", "applicable law"]
+    importance: critical
+    standard:
+      position: "Laws of the Republic of Kenya."
+      rationale: "Default for Kenyan-counterparty agreements; ensures local court familiarity and enforceability."
+    fallback:
+      position: "Laws of England and Wales, OR laws of Kenya."
+      rationale: "Acceptable for international counterparties; English law is industry-standard alternative."
+    hard_limit:
+      position: "Kenya, England and Wales, Singapore, Mauritius, or New York. No other jurisdictions."
+      rationale: "These are jurisdictions with predictable commercial law and reasonable enforcement against Kenyan parties."
+    citations: []
+
+  - id: dispute_resolution
+    display_name: "Dispute resolution"
+    aliases: ["jurisdiction", "arbitration", "forum"]
+    importance: critical
+    standard:
+      position: "Disputes resolved by arbitration under the Nairobi Centre for International Arbitration Rules, seat in Nairobi, single arbitrator, English language. Each party may seek interim/injunctive relief from any court of competent jurisdiction."
+      rationale: "NCIA arbitration is standard Kenyan commercial practice; injunctive relief carve-out is essential for breach scenarios."
+    fallback:
+      position: "Arbitration under LCIA Rules, seat in London or Nairobi, single arbitrator, English language. Same injunctive relief carve-out."
+      rationale: "LCIA acceptable where international counterparty insists; London seat acceptable if commercially significant."
+    hard_limit:
+      position: "Arbitration under recognised institutional rules (NCIA, LCIA, ICC, SIAC, KIAC) with seat in Kenya, England, Singapore, or Mauritius. Single arbitrator. Injunctive relief carve-out non-negotiable."
+      rationale: "Outside this set, enforceability against Kenyan party becomes unreliable."
+    citations: []
+
+  - id: term_and_termination
+    display_name: "Term and termination of agreement"
+    aliases: ["agreement term", "termination"]
+    importance: minor
+    standard:
+      position: "Either party may terminate for convenience on 30 days' written notice. Confidentiality obligations survive termination per the confidentiality_term clause."
+      rationale: "Standard. Distinguishes agreement term from confidentiality obligation term."
+    fallback:
+      position: "Termination on 60 days' written notice."
+      rationale: "Acceptable where counterparty wants more transition runway."
+    hard_limit:
+      position: "Termination on at least 14 days' written notice."
+      rationale: "Below 14 days creates operational disruption."
+    citations: []
+
+  - id: remedies
+    display_name: "Remedies for breach"
+    aliases: ["remedies", "injunction", "specific performance"]
+    importance: material
+    standard:
+      position: "Disclosing party entitled to seek injunctive relief in addition to damages, without need to post bond or prove actual damages, given the difficulty of quantifying confidentiality breaches."
+      rationale: "Standard market position; acknowledges that monetary damages are inadequate for confidentiality breach."
+    fallback:
+      position: "Same, but bond requirement determined by court in its discretion."
+      rationale: "Acceptable concession; courts will typically waive bond for confidentiality breach anyway."
+    hard_limit:
+      position: "Injunctive relief explicitly available; bond and proof-of-damages requirements at court's discretion per Kenyan civil procedure."
+      rationale: "Without explicit injunctive relief language, NDA is functionally unenforceable in time-sensitive breach scenarios."
+    citations: []
+
+  - id: no_obligation_to_proceed
+    display_name: "No obligation to enter further agreement"
+    aliases: ["no commitment", "exploratory only"]
+    importance: minor
+    standard:
+      position: "Neither party is obliged to enter any further agreement, transaction, or commercial relationship as a result of this NDA."
+      rationale: "Standard. Prevents NDA from being read as commitment to negotiate."
+    fallback:
+      position: "Same as standard, plus mutual acknowledgement that discussions are non-binding until definitive agreement signed."
+      rationale: "Acceptable additional comfort language."
+    hard_limit:
+      position: "Express disclaimer of obligation to proceed must be present."
+      rationale: "Without this, NDA can be argued as basis for promissory estoppel."
+    citations: []
+
+  - id: no_waiver
+    display_name: "No waiver"
+    aliases: ["waiver", "non-waiver"]
+    importance: minor
+    standard:
+      position: "Failure or delay in exercising any right under this agreement does not constitute waiver of that right."
+      rationale: "Standard boilerplate; protects against estoppel arguments."
+    fallback:
+      position: "Same as standard."
+      rationale: "No fallback needed."
+    hard_limit:
+      position: "Express non-waiver clause present."
+      rationale: "Standard market practice; absence is unusual."
+    citations: []
+
+  - id: severability
+    display_name: "Severability"
+    aliases: ["severability", "partial invalidity"]
+    importance: minor
+    standard:
+      position: "If any provision is held invalid or unenforceable, the remainder of the agreement remains in effect, and the invalid provision is reformed to the minimum extent necessary to make it enforceable while preserving original intent."
+      rationale: "Standard. Reformation language preferable to mere severance."
+    fallback:
+      position: "Same as standard, with simple severance instead of reformation."
+      rationale: "Acceptable; reformation preferred but severance alone is workable."
+    hard_limit:
+      position: "Severability clause must be present in some form."
+      rationale: "Absence creates risk that one invalid clause vitiates entire agreement."
+    citations: []
+
+  - id: assignment
+    display_name: "Assignment"
+    aliases: ["assignment", "transfer"]
+    importance: material
+    standard:
+      position: "Neither party may assign without the other's prior written consent, except to an affiliate or successor in connection with a merger, acquisition, or sale of substantially all assets."
+      rationale: "Standard market position; M&A carve-out preserves commercial flexibility."
+    fallback:
+      position: "Same as standard, with notice (rather than consent) for affiliate/successor assignments."
+      rationale: "Acceptable concession; affiliate-or-M&A carve-out is industry-standard."
+    hard_limit:
+      position: "At minimum: no assignment without consent, with reasonable consent standard (consent not unreasonably withheld) and exception for M&A."
+      rationale: "Without M&A carve-out, ordinary corporate transactions become legally risky."
+    citations: []
+
+  - id: notices
+    display_name: "Notices"
+    aliases: ["notices", "communications"]
+    importance: minor
+    standard:
+      position: "Notices in writing to the addresses specified in the agreement, deemed received: by hand on delivery; by registered post 3 business days after posting; by email on receipt of read receipt or 24 hours after sending if no bounce."
+      rationale: "Standard. Email acceptance reflects modern commercial practice."
+    fallback:
+      position: "Same as standard."
+      rationale: "No fallback needed."
+    hard_limit:
+      position: "Notices clause must specify at least: addresses, methods accepted, and deemed-receipt timing."
+      rationale: "Without notices clause, breach notification timing becomes contestable."
+    citations: []
+
+  - id: counterparts_and_execution
+    display_name: "Counterparts and electronic execution"
+    aliases: ["counterparts", "execution", "electronic signature"]
+    importance: minor
+    standard:
+      position: "Agreement may be executed in counterparts, and electronic signatures (including DocuSign and Adobe Sign) are valid and binding pursuant to Kenya Information and Communications Act 1998 (as amended)."
+      rationale: "Standard. Express e-signature reference removes argument over enforceability."
+    fallback:
+      position: "Same as standard."
+      rationale: "No fallback needed."
+    hard_limit:
+      position: "Counterparts clause must be present; e-signature acceptance preferable but not strictly required."
+      rationale: "Without counterparts, ordinary remote-execution becomes legally questionable."
+    citations:
+      - source: kenya-statute
+        id: "kica-1998"
+        section: "s.83"
+        note: "Kenya Information and Communications Act, electronic signature provisions (PLACEHOLDER citation — verify section reference in counsel review)."
