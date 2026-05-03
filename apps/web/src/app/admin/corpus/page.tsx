@@ -11,7 +11,6 @@
  * Authorisation: middleware enforces parasol_admin role on /admin/*.
  * Non-admins receive 404 (intentionally undiscoverable).
  */
-import { redirect } from 'next/navigation';
 import { requireAdmin } from '@/server/auth';
 
 export default async function CorpusAdminPage() {

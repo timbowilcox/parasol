@@ -7,12 +7,12 @@
   "types": "./src/index.ts",
   "scripts": {
     "typecheck": "tsc --noEmit",
-    "lint": "eslint src --ext .ts",
+    "lint": "eslint src",
     "test": "vitest run",
     "test:watch": "vitest"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.34.0",
+    "@anthropic-ai/sdk": "^0.92.0",
     "@parasol/core": "workspace:*",
     "@parasol/corpus": "workspace:*",
     "@parasol/playbooks": "workspace:*",
