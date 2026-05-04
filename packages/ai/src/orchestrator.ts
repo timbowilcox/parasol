@@ -1,25 +1,28 @@
-// Orchestrator shell — Sprint 1 day 7.
+// Orchestrator — Sprint 1 days 7+8.
 //
-// Stages 1-4 (the cheap Haiku stages) are wired and runnable. Stages 5-10
-// land Day 8 (compare-playbook, generate-redline, verify-citations) and
-// Day 9 (defined-terms-check, assemble-output). Until then, those stages
-// return empty placeholders so the orchestrator can run end-to-end against
-// the eval harness without crashing.
+// Stages 1-8 are wired:
+//   1. quality-assess           (Haiku)
+//   2. extract-text-clean       (Haiku)  — or 2b extract-text-degraded (Sonnet vision)
+//   3. triage                   (Haiku)
+//   4. extract-clauses          (Haiku)
+//   5. compare-playbook         (Sonnet, playbook context cached)
+//   6. retrieve-authority       (deterministic; calls @parasol/corpus via DI)
+//   7. generate-redline         (Sonnet, per-deviation, playbook + authority cached)
+//   8. verify-citations         (deterministic; calibrates confidence on failure)
 //
-// The shape of OrchestratorRun mirrors what the eval harness's
-// PipelineOutput type expects, so once the production stages are wired,
-// the eval --pipeline=production flag in packages/eval/src/cli/run.ts
-// just calls runOrchestrator() and maps the result.
+// Stage 9 (defined-terms-check) and 10 (assemble-output) land Day 9.
+// Until then, OrchestratorRunResult.redlineDocxBase64 is undefined and
+// the route handler / eval runner reads issues + citations directly.
+//
+// The shape of OrchestratorRunResult.issues mirrors the eval harness's
+// PipelineOutput, so once Day 9 ships, eval --pipeline=production runs
+// runOrchestrator() and maps the result.
 
 import type {
   ContractType,
   Jurisdiction,
-  IssueSeverity,
-  ConfidenceLevel,
 } from '@parasol/core'
-import {
-  UnsupportedContractTypeError,
-} from '@parasol/core'
+import { UnsupportedContractTypeError, PipelineError } from '@parasol/core'
 import type { OrchestratorContext, PipelineEvent, ModelEnv } from './types.js'
 import {
   qualityAssessStage,
@@ -27,12 +30,40 @@ import {
   extractTextDegradedStage,
   triageStage,
   extractClausesStage,
+  comparePlaybookStage,
+  generateRedlineStage,
   type PageInput,
   type QualityAssessOutput,
   type ExtractTextCleanOutput,
   type TriageOutput,
   type ExtractedClauseDraft,
+  type PipelineIssue,
+  type PipelineCitation,
+  type PlaybookDeviation,
 } from './stages/index.js'
+import {
+  validateCitations,
+  type CitationResolver,
+  type ValidationOutcome,
+} from './citation-validator.js'
+
+// ─── Dependency-injected helpers (provided by the caller) ───────────────────
+//
+// @parasol/ai deliberately does NOT depend on @parasol/corpus or
+// @parasol/playbooks (would create a workspace cycle). Instead the caller
+// (route handler / eval runner) constructs these helpers and passes them in.
+
+// Authority retriever — wraps @parasol/corpus.retrieveAuthority. Returns
+// short text snippets the orchestrator caches as authority chunks for the
+// generate-redline call. Limit is per-deviation; default 8 chunks per call
+// keeps the input prompt under Anthropic's per-request limit even for the
+// chattiest playbook clauses.
+export type AuthorityRetriever = (input: {
+  query: string
+  jurisdiction: Jurisdiction | 'unknown'
+  clauseId: string
+  topK?: number
+}) => Promise<string[]>
 
 // ─── Orchestrator input / output ────────────────────────────────────────────
 
@@ -41,53 +72,47 @@ export interface OrchestratorInput {
   workspaceId: string
   // Pages already split + (where possible) text-extracted by intake plumbing.
   pages: PageInput[]
-  // The workspace's contract-type allowlist for Sprint 1. Documents whose
-  // triage classifies outside this set are rejected with a friendly reply
-  // (handled by the email/web layer, not here).
+  // Workspace's contract-type allowlist. Documents whose triage classifies
+  // outside this set are rejected with a friendly reply (handled upstream).
   acceptedContractTypes: readonly ContractType[]
+  // Pre-serialised playbook content (use serialisePlaybookForContext from
+  // @parasol/playbooks). Cached in the system prefix for stages 5 + 7.
+  // null skips compare-playbook + downstream — useful for stages-1-4-only
+  // runs (the harness in Day 6 stub-mode does this).
+  playbookContext?: string | null
+  // Function to retrieve corpus authority chunks for a deviation.
+  // Wired by the caller against @parasol/corpus. null skips retrieval and
+  // generate-redline runs without authority context (citations rely on
+  // playbook references only — confidence will calibrate down).
+  retrieveAuthority?: AuthorityRetriever | null
+  // Function to resolve a citation's canonical_id against corpus_documents.
+  // Wired by the caller against Supabase. null skips the deterministic
+  // verification step; citations remain validated=false from the model.
+  resolveCitation?: CitationResolver | null
   // Optional model env override (Sprint 2 A/B per DEF-041).
   modelEnv?: ModelEnv
-  // Optional event sink. The orchestrator writes pipeline_events through
-  // this; the route handler attaches a Supabase-writing implementation.
-  // null defaults to a no-op.
+  // Optional event sink. The orchestrator forwards every PipelineEvent
+  // here; the route handler attaches a Supabase-writing implementation.
   emitEvent?: (event: PipelineEvent) => void
 }
 
 export interface OrchestratorRunResult {
   reviewId: string
-  // Set when the document failed triage gating.
+  // Set when the document failed gating before the heavy stages ran.
   unsupported?: { reason: 'unsupported_contract_type' | 'unsupported_jurisdiction' | 'unparseable'; detail: string }
-  // Stage-1-4 outputs — present when the run reached at least that stage.
+  // Stages 1-4 (always present once the pipeline got past quality-assess).
   quality?: QualityAssessOutput
   extractedText?: ExtractTextCleanOutput
   triage?: TriageOutput
   clauses?: ExtractedClauseDraft[]
-  // Stub placeholders for the heavy stages that land Day 8-9.
-  issues: PipelineIssueDraft[]
-  citations: PipelineCitationDraft[]
-  redlineDocxBase64?: string  // Day 9 assemble-output writes this
-  // Stage timings collected via PipelineEvents emitted to the sink.
-  // The orchestrator does not buffer them; the route handler aggregates
-  // from the event stream when it needs them.
-}
-
-// Stub draft shapes for stages that aren't wired yet. Once Day 8 ships
-// generate-redline + verify-citations, replace these with the production types.
-export interface PipelineIssueDraft {
-  clauseId: string
-  severity: IssueSeverity
-  confidence: ConfidenceLevel
-  currentPosition: string
-  recommendedPosition: string
-  reasoning: string
-  citations: PipelineCitationDraft[]
-}
-
-export interface PipelineCitationDraft {
-  source: string
-  id: string
-  section?: string
-  validated: boolean
+  // Stages 5-8 — present when the production path was taken.
+  deviations?: PlaybookDeviation[]
+  issues: PipelineIssue[]
+  citations: PipelineCitation[]
+  // Validation outcome for the run as a whole. Present when verify-citations ran.
+  citationValidation?: ValidationOutcome
+  // Day 9 assemble-output writes this (.docx tracked changes, base64).
+  redlineDocxBase64?: string
 }
 
 // ─── runOrchestrator ────────────────────────────────────────────────────────
@@ -97,10 +122,10 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
   const ctx: OrchestratorContext = {
     reviewId: input.reviewId,
     workspaceId: input.workspaceId,
-    jurisdiction: 'kenya',     // Sprint 1 default; overwritten after triage
-    contractType: 'unknown',   // overwritten after triage
-    playbookContext: null,     // loaded between stages 4 and 5 (Day 8)
-    authorityChunks: [],       // populated per-clause inside generate-redline (Day 8)
+    jurisdiction: 'kenya',
+    contractType: 'unknown',
+    playbookContext: input.playbookContext ?? null,
+    authorityChunks: [],
     emitEvent: (e) => {
       events.push(e)
       input.emitEvent?.(e)
@@ -142,30 +167,124 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
     contractType: triage.contractType as ContractType,
   }, ctx)
 
-  // ── Stages 5-10: deliberately not wired in Day 7. Day 8 lands the heavy
-  // reasoning stages; Day 9 wires assemble-output. For now, return the
-  // stage-1-4 results plus empty issues/citations so the eval harness sees
-  // a coherent (if thin) PipelineOutput.
+  // If the caller didn't supply playbook context, stop here. Stages 5+
+  // need the playbook to produce meaningful output. The eval harness's
+  // stub-oracle path runs without a playbook by design; production runs
+  // always supply one.
+  if (!ctx.playbookContext) {
+    return {
+      reviewId: input.reviewId,
+      quality,
+      extractedText,
+      triage,
+      clauses: clauseOut.clauses,
+      issues: [],
+      citations: [],
+    }
+  }
+
+  // ── Stage 5: compare-playbook
+  const compareOut = await comparePlaybookStage.run({
+    contractType: triage.contractType as ContractType,
+    jurisdiction: triage.jurisdiction,
+    clauses: clauseOut.clauses,
+  }, ctx)
+
+  // ── Stage 6: retrieve-authority (deterministic; per-deviation)
+  // ── Stage 7: generate-redline (Sonnet; per-deviation, gracefully degrades)
+  const issues: PipelineIssue[] = []
+  for (const deviation of compareOut.deviations) {
+    // Refresh authority chunks for this clause's deviation. If retrieval
+    // is not wired, generate-redline runs without authority context.
+    const chunks = input.retrieveAuthority
+      ? await retrieveAuthorityForDeviation(input.retrieveAuthority, deviation, triage.jurisdiction)
+      : []
+    ctx.authorityChunks = chunks
+
+    try {
+      const redline = await generateRedlineStage.run({
+        contractType: triage.contractType as ContractType,
+        jurisdiction: triage.jurisdiction,
+        deviation,
+      }, ctx)
+      issues.push(redline.issue)
+    } catch (cause) {
+      // Per orchestration.md: a single failed flag doesn't kill the review.
+      // Surface a manual-review-recommended placeholder issue and continue.
+      // The route handler / UI explains the partial-failure to the user.
+      issues.push(buildFailureIssue(deviation, (cause as Error).message))
+    }
+  }
+
+  // ── Stage 8: verify-citations (deterministic; mutates confidence)
+  const citationValidation = await validateCitations(issues, {
+    resolveCitation: input.resolveCitation ?? undefined,
+  })
+
+  // Flatten verified citations to the run-level citations array. The eval
+  // harness uses this for its independent citation-validity metric.
+  const allCitations = citationValidation.issues.flatMap((i) => i.citations)
+
   return {
     reviewId: input.reviewId,
     quality,
     extractedText,
     triage,
     clauses: clauseOut.clauses,
-    issues: [],
+    deviations: compareOut.deviations,
+    issues: citationValidation.issues,
+    citations: allCitations,
+    citationValidation,
+  }
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────────────
+
+// Build the retrieval query for a deviation: the playbook clause id +
+// jurisdiction + (compare-playbook's reasoning, lightly summarised) →
+// improves recall over just "clauseId" because the dense retriever is
+// trained on natural language not enum strings.
+async function retrieveAuthorityForDeviation(
+  retrieve: AuthorityRetriever,
+  deviation: PlaybookDeviation,
+  jurisdiction: Jurisdiction | 'unknown',
+): Promise<string[]> {
+  const reasoning = deviation.reasoning.replace(/\s+/g, ' ').slice(0, 240)
+  const query = `${deviation.playbookClauseId} ${reasoning}`
+  return retrieve({
+    query,
+    jurisdiction,
+    clauseId: deviation.playbookClauseId,
+    topK: 8,
+  })
+}
+
+// Construct a manual-review issue placeholder when generate-redline fails
+// for a particular deviation. Preserves the deviation's clause id +
+// severity so the user sees "we identified a problem here, please review
+// manually" instead of silent omission.
+function buildFailureIssue(deviation: PlaybookDeviation, errorMessage: string): PipelineIssue {
+  return {
+    clauseId: deviation.playbookClauseId,
+    severity: deviation.severity,
+    confidence: 'manual_review_recommended',
+    currentPosition: deviation.currentText
+      ? deviation.currentText.replace(/\s+/g, ' ').slice(0, 200)
+      : '[clause missing from document]',
+    recommendedPosition:
+      'Manual review recommended — the redline generator could not produce a recommendation for this clause.',
+    reasoning: `${deviation.reasoning}\n\nGenerate-redline failed: ${errorMessage}`,
+    redlineText: '',
     citations: [],
   }
 }
 
-// ─── Helpers exposed for the route / eval layers ────────────────────────────
-
-// Sprint 1 acceptance set. Document received outside this set gets the
-// friendly explainer reply; doesn't proceed through the pipeline.
+// Sprint 1 acceptance set. Documents outside this set get the friendly
+// explainer reply; the orchestrator returns unsupported.
 export const SPRINT_1_ACCEPTED_CONTRACT_TYPES: readonly ContractType[] = ['nda']
 
-// For tests + future composition: callers can throw the typed error from
-// the orchestrator's unsupported branch when they want to convert to an
-// error rather than handle the result.
+// Convert the orchestrator's unsupported branch into a typed error for
+// callers that prefer try/catch over result-shape inspection.
 export function rejectUnsupportedContractType(detail: string): never {
   throw new UnsupportedContractTypeError(detail)
 }
@@ -173,3 +292,8 @@ export function rejectUnsupportedContractType(detail: string): never {
 // Re-export the EAC jurisdiction enum string union so the route handler
 // can narrow against it without re-importing.
 export type EacJurisdiction = Exclude<Jurisdiction, never>
+
+// Re-thrown by the orchestrator-as-stage if a future caller wants the
+// pipeline to fail rather than return partial results. Sprint 1 doesn't
+// use this path; documented for the Day 9 route handler integration.
+export { PipelineError }

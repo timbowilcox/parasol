@@ -176,3 +176,128 @@ export const extractClausesOutputSchema = z.object({
 
 export type ExtractClausesInput = z.infer<typeof extractClausesInputSchema>
 export type ExtractClausesOutput = z.infer<typeof extractClausesOutputSchema>
+
+// ─── Stage 5: compare-playbook (Sonnet) ─────────────────────────────────────
+// For each extracted clause, identify where the document falls relative to
+// the playbook's standard / fallback / hard-limit positions. Outputs one
+// deviation entry per flagged clause.
+
+export const playbookPositionEnum = z.enum([
+  // Document matches or beats the playbook standard. No flag.
+  'standard',
+  // Document falls between standard and fallback — acceptable but not ideal.
+  'fallback',
+  // Document falls between fallback and hard limit — escalate to negotiation.
+  'hard_limit',
+  // Document is below the hard limit — must be redlined.
+  'violation',
+])
+
+export const playbookDeviationSchema = z.object({
+  // The playbook clause this deviation pertains to. Matches a clause id in
+  // packages/playbooks/<jurisdiction>/<contractType>.yaml.
+  playbookClauseId: z.string().min(1),
+  // The id from the extract-clauses stage that this deviation matches.
+  // Empty string when the playbook clause is missing entirely from the
+  // document (a particularly common signal for data_protection in non-Kenya
+  // NDAs).
+  matchedExtractedClauseId: z.string(),
+  // Where the document falls on the playbook's spectrum.
+  position: playbookPositionEnum,
+  // Severity bucket the orchestrator passes through to generate-redline.
+  // Critical = redline must include explicit hard-limit-violation language;
+  // material = redline with negotiation framing; minor = informational flag.
+  severity: z.enum(['critical', 'material', 'minor']),
+  // Calibrated confidence in the comparison call.
+  confidence: z.enum(['high', 'medium', 'manual_review_recommended']),
+  // The verbatim clause text from the document — what generate-redline edits.
+  // Required for hallucination detection; if this text doesn't appear in
+  // the source document, the issue is hallucinated.
+  currentText: z.string(),
+  // One-paragraph reasoning. Surfaces in the audit log and (verbatim) in
+  // generate-redline's input so the model has context for the redline.
+  reasoning: z.string(),
+})
+
+export type PlaybookPosition = z.infer<typeof playbookPositionEnum>
+export type PlaybookDeviation = z.infer<typeof playbookDeviationSchema>
+
+export const comparePlaybookInputSchema = z.object({
+  // From triage. Used to look up the right playbook (the actual playbook
+  // text comes via OrchestratorContext.playbookContext as a cached system
+  // block).
+  contractType: z.enum([
+    'nda', 'dpa', 'msa', 'saas', 'employment', 'lease', 'distribution',
+  ]),
+  jurisdiction: z.enum(['kenya', 'uganda', 'tanzania', 'rwanda', 'unknown']),
+  clauses: z.array(extractedClauseSchema).min(1),
+})
+
+export const comparePlaybookOutputSchema = z.object({
+  deviations: z.array(playbookDeviationSchema),
+})
+
+export type ComparePlaybookInput = z.infer<typeof comparePlaybookInputSchema>
+export type ComparePlaybookOutput = z.infer<typeof comparePlaybookOutputSchema>
+
+// ─── Stage 7: generate-redline (Sonnet, per-deviation) ──────────────────────
+// For one flagged deviation + the corpus authority chunks the orchestrator
+// has pre-fetched, produce a full PipelineIssue with redline text and
+// citations. Called once per deviation; shares cached playbook + authority
+// context across calls within a single review.
+
+export const pipelineCitationSchema = z.object({
+  // Source enum mirrors the playbook's citation source vocabulary. The
+  // verify-citations step adds 'validated' = true | false.
+  source: z.enum([
+    'kenya-statute',
+    'kenya-case',
+    'kenya-regulation',
+    'odpc-determination',
+    'kra-ruling',
+    'cbk-circular',
+    'cma-notice',
+    'eac-treaty',
+    'market-norm',
+    'parasol-internal',
+  ]),
+  id: z.string().min(1),
+  section: z.string().optional(),
+  // Generate-redline always emits validated: false; verify-citations promotes
+  // to true after deterministic resolution. The schema accepts both values
+  // so generate-redline output and verify-citations output share a shape.
+  validated: z.boolean(),
+})
+
+export const pipelineIssueSchema = z.object({
+  clauseId: z.string().min(1),
+  severity: z.enum(['critical', 'material', 'minor']),
+  confidence: z.enum(['high', 'medium', 'manual_review_recommended']),
+  currentPosition: z.string(),
+  recommendedPosition: z.string(),
+  reasoning: z.string(),
+  // The redline text — what the model proposes to substitute for currentPosition
+  // in the customer's contract. Empty when generate-redline can produce a
+  // recommended position but not a verbatim substitution (e.g. a structural
+  // missing-clause flag).
+  redlineText: z.string(),
+  citations: z.array(pipelineCitationSchema),
+})
+
+export type PipelineCitation = z.infer<typeof pipelineCitationSchema>
+export type PipelineIssue = z.infer<typeof pipelineIssueSchema>
+
+export const generateRedlineInputSchema = z.object({
+  contractType: z.enum([
+    'nda', 'dpa', 'msa', 'saas', 'employment', 'lease', 'distribution',
+  ]),
+  jurisdiction: z.enum(['kenya', 'uganda', 'tanzania', 'rwanda', 'unknown']),
+  deviation: playbookDeviationSchema,
+})
+
+export const generateRedlineOutputSchema = z.object({
+  issue: pipelineIssueSchema,
+})
+
+export type GenerateRedlineInput = z.infer<typeof generateRedlineInputSchema>
+export type GenerateRedlineOutput = z.infer<typeof generateRedlineOutputSchema>

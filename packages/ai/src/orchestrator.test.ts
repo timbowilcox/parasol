@@ -187,3 +187,229 @@ describe('runOrchestrator — emits PipelineEvents to the supplied sink', () => 
     expect(captured).toContain('extract-clauses:completed')
   })
 })
+
+// ─── Day 8: stages 5-8 end-to-end ───────────────────────────────────────────
+
+describe('runOrchestrator — full pipeline (stages 1-8)', () => {
+  it('runs compare-playbook → retrieve-authority → generate-redline → verify-citations', async () => {
+    const { client, create } = sequencedClient([
+      // Stage 1
+      { pages: [{ pageNumber: 0, qualityScore: 0.95, isClean: true, issues: [] }], recommendedRoute: 'clean' },
+      // Stage 2
+      { pages: [{ pageNumber: 0, text: 'doc body' }], fullText: 'doc body' },
+      // Stage 3
+      { contractType: 'nda', jurisdiction: 'unknown', parties: [], confidence: 'high', reasoning: 'NDA classified.' },
+      // Stage 4
+      { clauses: [{ clauseId: 'governing_law', displayName: 'Governing law', rawText: 'Delaware.', clauseOrder: 0 }] },
+      // Stage 5: compare-playbook
+      {
+        deviations: [{
+          playbookClauseId: 'governing_law',
+          matchedExtractedClauseId: 'governing_law',
+          position: 'violation',
+          severity: 'critical',
+          confidence: 'high',
+          currentText: 'Delaware.',
+          reasoning: 'Delaware outside hard-limit set.',
+        }],
+      },
+      // Stage 7: generate-redline (one call per deviation)
+      {
+        issue: {
+          clauseId: 'governing_law',
+          severity: 'critical',
+          confidence: 'high',
+          currentPosition: 'Delaware-governed.',
+          recommendedPosition: 'Kenya-governed.',
+          reasoning: 'Delaware is outside the playbook hard-limit set.',
+          redlineText: 'This Agreement shall be governed by the laws of Kenya.',
+          citations: [
+            { source: 'kenya-statute', id: '1995/4', section: 's.36', validated: false },
+          ],
+        },
+      },
+    ])
+    overrideClient(client as never)
+
+    const retrieveAuthority = vi.fn(async () => ['Arbitration Act 1995 s.36 chunk text.'])
+    const resolveCitation = vi.fn(async (_s: string, id: string) => id === '1995/4')
+
+    const result = await runOrchestrator({
+      reviewId: 'r-5',
+      workspaceId: 'ws-1',
+      pages: [{ pageNumber: 0, text: 't' }],
+      acceptedContractTypes: SPRINT_1_ACCEPTED_CONTRACT_TYPES,
+      playbookContext: '# Playbook\n## Clause: governing_law\n...',
+      retrieveAuthority,
+      resolveCitation,
+      modelEnv: { haiku: 'm', sonnet: 'm' },
+    })
+
+    expect(result.unsupported).toBeUndefined()
+    expect(result.deviations).toHaveLength(1)
+    expect(result.issues).toHaveLength(1)
+    expect(result.issues[0]!.citations[0]!.validated).toBe(true)
+    expect(result.citations).toHaveLength(1)
+    expect(result.citationValidation?.totalCitations).toBe(1)
+    expect(result.citationValidation?.resolvedCitations).toBe(1)
+    expect(result.citationValidation?.issuesWithFailures).toBe(0)
+    // 4 Haiku stages + 1 compare-playbook + 1 generate-redline = 6 LLM calls
+    expect(create).toHaveBeenCalledTimes(6)
+    expect(retrieveAuthority).toHaveBeenCalledTimes(1)
+    expect(retrieveAuthority).toHaveBeenCalledWith(expect.objectContaining({
+      clauseId: 'governing_law',
+    }))
+  })
+
+  it('stops after stage 4 when no playbookContext is supplied', async () => {
+    const { client, create } = sequencedClient([
+      { pages: [{ pageNumber: 0, qualityScore: 0.9, isClean: true, issues: [] }], recommendedRoute: 'clean' },
+      { pages: [{ pageNumber: 0, text: 't' }], fullText: 't' },
+      { contractType: 'nda', jurisdiction: 'kenya', parties: [], confidence: 'high', reasoning: 'NDA.' },
+      { clauses: [{ clauseId: 'governing_law', displayName: 'GL', rawText: 'Kenya.', clauseOrder: 0 }] },
+    ])
+    overrideClient(client as never)
+
+    const result = await runOrchestrator({
+      reviewId: 'r-6',
+      workspaceId: 'ws-1',
+      pages: [{ pageNumber: 0, text: 't' }],
+      acceptedContractTypes: SPRINT_1_ACCEPTED_CONTRACT_TYPES,
+      // playbookContext omitted on purpose
+      modelEnv: { haiku: 'm', sonnet: 'm' },
+    })
+    expect(result.deviations).toBeUndefined()
+    expect(result.issues).toEqual([])
+    expect(result.citations).toEqual([])
+    expect(create).toHaveBeenCalledTimes(4)  // no compare-playbook / generate-redline
+  })
+
+  it('downgrades confidence on citation-resolution failure', async () => {
+    const { client } = sequencedClient([
+      { pages: [{ pageNumber: 0, qualityScore: 0.95, isClean: true, issues: [] }], recommendedRoute: 'clean' },
+      { pages: [{ pageNumber: 0, text: 'doc' }], fullText: 'doc' },
+      { contractType: 'nda', jurisdiction: 'kenya', parties: [], confidence: 'high', reasoning: 'NDA.' },
+      { clauses: [{ clauseId: 'data_protection', displayName: 'DP', rawText: 'Generic.', clauseOrder: 0 }] },
+      {
+        deviations: [{
+          playbookClauseId: 'data_protection',
+          matchedExtractedClauseId: 'data_protection',
+          position: 'violation',
+          severity: 'critical',
+          confidence: 'high',
+          currentText: 'Generic.',
+          reasoning: 'No DPA-aware language.',
+        }],
+      },
+      {
+        issue: {
+          clauseId: 'data_protection',
+          severity: 'critical',
+          confidence: 'high',  // model says high; verify-citations should drop this
+          currentPosition: 'Generic.',
+          recommendedPosition: 'DPA-aware.',
+          reasoning: 'DPA s.49.',
+          redlineText: 'DPA-compliant text.',
+          citations: [
+            { source: 'kenya-statute', id: 'fake-act-9999', section: 's.49', validated: false },
+          ],
+        },
+      },
+    ])
+    overrideClient(client as never)
+
+    const result = await runOrchestrator({
+      reviewId: 'r-7',
+      workspaceId: 'ws-1',
+      pages: [{ pageNumber: 0, text: 't' }],
+      acceptedContractTypes: SPRINT_1_ACCEPTED_CONTRACT_TYPES,
+      playbookContext: '# Playbook',
+      retrieveAuthority: async () => [],
+      resolveCitation: async () => false,  // every citation fails
+      modelEnv: { haiku: 'm', sonnet: 'm' },
+    })
+
+    expect(result.issues[0]!.confidence).toBe('medium')  // dropped from high
+    expect(result.issues[0]!.citations[0]!.validated).toBe(false)
+    expect(result.citationValidation?.unresolvedCitations).toBe(1)
+  })
+
+  it('graceful-degrades when generate-redline fails for one deviation', async () => {
+    const queue = [
+      { pages: [{ pageNumber: 0, qualityScore: 0.9, isClean: true, issues: [] }], recommendedRoute: 'clean' },
+      { pages: [{ pageNumber: 0, text: 't' }], fullText: 't' },
+      { contractType: 'nda', jurisdiction: 'kenya', parties: [], confidence: 'high', reasoning: 'NDA.' },
+      { clauses: [{ clauseId: 'governing_law', displayName: 'GL', rawText: 'X.', clauseOrder: 0 }] },
+      {
+        deviations: [{
+          playbookClauseId: 'governing_law',
+          matchedExtractedClauseId: 'governing_law',
+          position: 'violation',
+          severity: 'critical',
+          confidence: 'high',
+          currentText: 'X.',
+          reasoning: 'r',
+        }],
+      },
+      // generate-redline returns malformed JSON repeatedly → exhausts retries
+      'not json',
+      'not json',
+      'not json',
+    ]
+    const create = vi.fn(async () => {
+      const next = queue.shift()
+      const text = typeof next === 'string' ? next : JSON.stringify(next)
+      return {
+        id: 'msg', type: 'message', role: 'assistant',
+        content: [{ type: 'text', text }],
+        model: 'm', stop_reason: 'end_turn', stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }
+    })
+    overrideClient({ messages: { create } } as never)
+
+    const result = await runOrchestrator({
+      reviewId: 'r-8',
+      workspaceId: 'ws-1',
+      pages: [{ pageNumber: 0, text: 't' }],
+      acceptedContractTypes: SPRINT_1_ACCEPTED_CONTRACT_TYPES,
+      playbookContext: '# Playbook',
+      retrieveAuthority: async () => [],
+      resolveCitation: async () => true,
+      modelEnv: { haiku: 'm', sonnet: 'm' },
+    })
+
+    // The orchestrator surfaces a manual-review placeholder issue rather
+    // than throwing, so the rest of the pipeline (verify-citations) still
+    // runs and the user sees "we identified a problem here" instead of
+    // silent omission.
+    expect(result.issues).toHaveLength(1)
+    expect(result.issues[0]!.confidence).toBe('manual_review_recommended')
+    expect(result.issues[0]!.recommendedPosition).toContain('Manual review')
+  })
+
+  it('runs without retrieveAuthority/resolveCitation when both are null', async () => {
+    const { client } = sequencedClient([
+      { pages: [{ pageNumber: 0, qualityScore: 0.9, isClean: true, issues: [] }], recommendedRoute: 'clean' },
+      { pages: [{ pageNumber: 0, text: 't' }], fullText: 't' },
+      { contractType: 'nda', jurisdiction: 'kenya', parties: [], confidence: 'high', reasoning: 'NDA.' },
+      { clauses: [{ clauseId: 'governing_law', displayName: 'GL', rawText: 'Kenya.', clauseOrder: 0 }] },
+      { deviations: [] },  // compare-playbook says nothing to flag
+    ])
+    overrideClient(client as never)
+
+    const result = await runOrchestrator({
+      reviewId: 'r-9',
+      workspaceId: 'ws-1',
+      pages: [{ pageNumber: 0, text: 't' }],
+      acceptedContractTypes: SPRINT_1_ACCEPTED_CONTRACT_TYPES,
+      playbookContext: '# Playbook',
+      retrieveAuthority: null,
+      resolveCitation: null,
+      modelEnv: { haiku: 'm', sonnet: 'm' },
+    })
+    expect(result.deviations).toEqual([])
+    expect(result.issues).toEqual([])
+    expect(result.citationValidation?.totalCitations).toBe(0)
+  })
+})
