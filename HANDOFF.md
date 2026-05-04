@@ -1,121 +1,115 @@
-# Handoff: Sprint 1, Day 6 — Eval harness
+# Handoff: Sprint 1, Day 7 — Pipeline stages 1-4 + orchestrator shell
 
 Date: 2026-05-04
-Session type: Sprint 1 Day 6
+Session type: Sprint 1 Day 7
 
 ## What was completed
 
-Day 6 scope per `docs/sprint-1-plan.md`: eval harness skeleton — runner, metrics, reporter, ground-truth annotation YAML schema, 5 annotated NDAs, CI gate. Plus DEFERRED hygiene (DEF-001, DEF-005, DEF-008 moved to Completed now that Tim has resolved them).
+Day 7 scope per `docs/sprint-1-plan.md`: orchestration stages 1-4 (the cheap Haiku stages) plus the orchestrator shell. Stages 5-10 (the heavy Sonnet reasoning + assemble-output) land Day 8-9; this handoff stubs them so the orchestrator runs end to end against the eval harness.
 
-### `packages/eval/src/` (was a stub package)
+### Stage I/O types (`packages/ai/src/stages/types.ts`)
 
-- **`types.ts`** — single source of truth for the eval data model. Key types: `GroundTruth` (per-NDA annotation), `ExpectedIssue`, `ExpectedCitation`, `PipelineOutput`, `PerNdaScore`, `EvalRunResult`, `AggregateScore`. Plus `SPRINT_1_ACCEPTANCE_BAR` constant declaring F1 ≥ 0.85, citation validity = 1.0, hallucination ≤ 0.02, redline appropriateness ≥ 0.80 — matches the Sprint 1 acceptance criteria in `docs/sprint-1-plan.md` exactly.
-- **`schema.ts`** — Zod schema for the annotation YAML. Validates `filename`, `annotated_at` (YYYY-MM-DD), `annotated_by`, optional `notes`, `expected_issues[]` (clause_id, severity, description, optional required + expected_confidence), optional `expected_citations[]`. Citation source enum mirrors the playbook's.
-- **`metrics.ts`** — pure scoring functions:
-  - `scoreNda({ groundTruth, pipelineOutput, sourceText, resolveCitation })` returns a `PerNdaScore` with precision / recall / F1 (matched on `clause_id::severity`), citation validity rate, hallucination rate, and per-NDA diagnostics (matched / extra / missed issues + invalid citations).
-  - `aggregate(perNda[])` computes mean across cases. Redline appropriateness is only included for the rated subset (sampled at 20% per the sprint plan).
-  - `checkAcceptanceBar(aggregate, bar)` returns pass/fail + structured failure reasons. Used by the CI gate.
-  - Severity matching is **strict** (mismatch counts as miss + extra). Day 13 may revisit if the eval data shows the model commonly swaps neighbouring severities.
-  - Hallucination check is conservative: any `current_position` ≥ 12 chars whose normalised text doesn't appear as a substring of the source. Skipped when `sourceText` is null (e.g. PDF / DOCX before extraction lands Day 7).
-- **`pipeline-stub.ts`** — `runStubPipeline(gt, { mode })` produces deterministic output for `oracle` (echoes ground truth perfectly → F1 = 1.0) or `noisy` (drops a critical, swaps a severity, hallucinates an issue, marks one citation invalid → F1 < 1, hallucination > 0). Lets us exercise the harness end-to-end before the real orchestrator lands Day 9.
-- **`runner.ts`** — `loadAnnotations(dir)` walks the golden directory for `*.annotation.yaml` files, parses + validates each, and pairs with the corresponding NDA file. Skips plaintext load for binary formats (`.pdf`, `.docx`, `.doc`) so reading garbage UTF-8 doesn't poison the hallucination check; Day 7's extract-text stage will be wired in later. `run({ pipeline, ... })` runs the pipeline against each annotation, scores, returns the full `EvalRunResult`.
-- **`reporter.ts`** — `writeJson(result, dir)` writes `<sprint>.json`; `formatSummary(result)` returns the human-readable table (per-NDA + aggregate + acceptance verdict + diagnostics).
-- **`cli/run.ts`** — `pnpm --filter @parasol/eval run eval`. Flags: `--pipeline=<stub-oracle|stub-noisy|production>`, `--sprint=<label>`, `--no-corpus`, `--golden-dir=<path>`. Wires Supabase corpus resolver when env present. Production-pipeline flag deliberately throws until Day 9 lands the orchestrator (avoids silent-stub-mode-passing-CI gotcha).
-- **`cli/gate.ts`** — `pnpm --filter @parasol/eval run eval:gate`. Reads the result JSON and exits 1 with structured failure reasons if the aggregate breaches the acceptance bar.
-- **`index.ts`** — barrel export.
+Single source of truth for the data flowing through the pipeline. Notable types:
+- `PageInput` — either pre-extracted text or a base64 image (intake plumbing decides which); refined to require one of the two.
+- `QualityAssessOutput` — per-page `qualityScore` (0-1), `isClean` flag, `issues[]`, plus a document-level `recommendedRoute: 'clean' | 'degraded'`.
+- `TriageOutput` — `contractType` (NDA/DPA/MSA/SaaS/employment/lease/distribution/unknown), `jurisdiction` (kenya/uganda/tanzania/rwanda/unknown — non-EAC inputs report 'unknown' so downstream stages flag the mismatch), `parties[]`, calibrated confidence, one-sentence reasoning.
+- `ExtractedClauseDraft` — clause id (matches playbook vocabulary or `unknown_<n>`), display name, **verbatim** raw text (needed for the Day 8 hallucination check), section reference, 0-indexed clause order.
 
-### Annotations
+All schemas are required-fields-only; no `.default()` calls on the output schemas, because Zod's `.default()` creates an input/output type asymmetry that breaks the `Stage<I,O>` interface contract. The prompts instruct the model to always emit the field, even if empty.
 
-Five NDAs annotated in `packages/eval/data/golden/nda/<filename>.annotation.yaml`:
-- **nda-001.pdf** — Calpine Corp / LS Power M&A NDA (US, mutual, signed). Heavy critical-flag profile (Delaware governing law, Delaware courts, no DPA-aware language). 5 issues + 4 expected citations.
-- **nda-009.pdf** — Common Paper Mutual NDA (US-Delaware default, template). Cover-page-only edge case. 3 critical issues + 2 citations.
-- **nda-010.pdf** — gov.uk mutual NDA (UK template). Cleaner alignment with playbook (English law within fallback) — 3 material/minor issues + 2 citations.
-- **nda-013.pdf** — Britam Kenya supplier NDA (Kenya, one-way). Most representative of ICP. 4 issues spanning critical/material/minor + 3 citations.
-- **nda-015.docx** — Common Paper DOCX form (mirror of nda-009.pdf). Exercises the DOCX code path. 4 issues + 3 citations.
+### Generic stage runner (`packages/ai/src/stages/runner.ts`)
 
-All annotations are `annotated_by: parasol-internal-draft` — the same draft-status mechanic as the playbook (DEF-028 path). Counsel review of annotations is a v1-launch gate; absolute scores from the production pipeline land Day 13. Until then, the harness verifies relative correctness (regression detection), not absolute benchmarks.
+The single place that knows about LLM transport + JSON parsing. Every stage delegates to `executeStage({ stage, input, ctx })`, which:
+1. Validates input against the stage's `inputSchema` (programming error if invalid → throws, no retry).
+2. Builds the system prefix using `cachedTextBlock` (system prompt cached for 5-min TTL; playbook + authority chunks added when the stage requests them — Day 8 stages will).
+3. Calls `createMessage` with the resolved model.
+4. Extracts the assistant's text content.
+5. JSON-parses the response with `tolerantJsonParse` — strips ```json fences, recovers JSON embedded in prose.
+6. Validates against `outputSchema`. On failure, retries per the stage's `retry` policy (default 3 attempts, exponential backoff 250ms / 500ms / 1000ms).
+7. Emits `started`/`retried`/`completed`/`failed` `PipelineEvent`s with token usage + cache hit counts at each transition.
 
-`packages/eval/data/golden/nda/README.md` documents the annotation format.
+`tolerantJsonParse` is exported and unit-tested separately because LLM output cleanup is a frequent source of bugs. Handles fences, prose-wrapped JSON, and arrays-vs-objects.
 
-### CI gate (`.github/workflows/ci.yml`)
+### Five prompts (`packages/ai/src/prompts/`)
 
-The previous `eval-gate` job was gated behind `vars.EVAL_GATE_ENABLED` and required all the API + Supabase secrets. Replaced with a Sprint-1-appropriate version that:
-1. Runs `pnpm eval -- --pipeline=stub-oracle --no-corpus` (no secrets needed)
-2. Runs `pnpm eval:gate` against the resulting JSON
+- **`quality-assess.ts`** (Haiku, v0.1.0) — per-page quality classification. Threshold 0.7 routes to clean.
+- **`extract-text-clean.ts`** (Haiku, v0.1.0) — strips repeated headers/footers, rejoins reflow paragraphs, preserves hierarchy markers verbatim. Explicitly instructs the model NOT to paraphrase or "improve" clause text.
+- **`extract-text-degraded.ts`** (Sonnet, v0.1.0) — vision pass for scans/photos. Same DO/DON'T list as clean. The intake-pipeline plumbing (Day 9) attaches actual image content blocks; Day 7 ships the text framing.
+- **`triage.ts`** (Haiku, v0.1.0) — classifies contract type, jurisdiction, parties, calibrated confidence, one-sentence reasoning. Documents that non-EAC governing law → `jurisdiction: 'unknown'` so downstream can flag.
+- **`extract-clauses.ts`** (Haiku, v0.1.0) — decomposes the document into structured clauses keyed against the playbook's controlled vocabulary. The vocabulary is inlined in the prompt (15 NDA clause ids) and a unit test asserts it stays in sync with `kenya/nda.yaml`.
 
-Verifies the harness wiring (schema, runner, metrics, reporter, gate) is intact end to end. Day 9 flips to `--pipeline=production` with secrets once the orchestrator lands.
+Every prompt declares `version: '0.1.0'`. Eval gates against version regressions per stage.
 
-Also added a `playbook-validate` job that runs the playbook validator with `--no-corpus` (schema-only, since Supabase is not exposed in CI).
+### Five stages (`packages/ai/src/stages/`)
 
-### Tests added (42 new)
+`quality-assess.ts`, `extract-text-clean.ts`, `extract-text-degraded.ts`, `triage.ts`, `extract-clauses.ts` — each ~25 lines, all delegating to `executeStage`. Stages declare their `modelRole` (Haiku for 1-2-3-4-5, Sonnet for 2b's vision), `cacheable: false` (per-document state), `retry: DEFAULT_RETRY` (3 attempts exp backoff), and an empty `evalCases[]` (Day 13 populates).
+
+### Orchestrator shell (`packages/ai/src/orchestrator.ts`)
+
+`runOrchestrator(input)` runs the four stages sequentially:
+1. `quality-assess` → routes to one of:
+2. `extract-text-clean` (Haiku) **or** `extract-text-degraded` (Sonnet vision)
+3. `triage` → if `contractType` ∉ `acceptedContractTypes`, returns early with `{ unsupported: { reason: 'unsupported_contract_type', detail } }` (no extract-clauses call). Sprint 1's accepted set is `['nda']`.
+4. `extract-clauses` → returns `OrchestratorRunResult`.
+
+Stages 5-10 are deliberately not wired. The result shape includes empty `issues[]` and `citations[]` placeholders so the eval harness sees a coherent (if thin) `PipelineOutput`. Day 8 lands the heavy stages (compare-playbook, generate-redline, verify-citations) and replaces the placeholders.
+
+`SPRINT_1_ACCEPTED_CONTRACT_TYPES` exported as `['nda']` so the route handler / eval harness can pass it without re-defining.
+
+### Tests added (30 new)
 
 | Suite | Tests |
 |-------|-------|
-| `packages/eval/src/schema.test.ts` | 7 — minimal valid, required-field rejection, malformed date, unknown severity, optional fields, unknown citation source, multi-citation |
-| `packages/eval/src/metrics.test.ts` | 22 — `normaliseForSubstringMatch`, perfect match, false-negative penalty, false-positive penalty, severity strict mismatch, citation validity (no-resolver / resolver / fallback to validated flag / dedup), hallucination (zero / 1.0 / null source / short text), aggregate (empty / averaging / rated subset), acceptance bar (pass / F1 fail / hallucination fail / citation fail / redline only when present), buildRunResult |
-| `packages/eval/src/runner.test.ts` | 6 — annotation loading, oracle yields F1=1 across cases, noisy degrades, malformed annotation throws, progress callback fires, binary-format `.pdf` source skip |
-| `packages/eval/src/reporter.test.ts` | 7 — JSON write, default results dir constant, per-NDA filenames in table, acceptance verdict (PASS + FAIL), per-NDA diagnostics, models + git_sha rendering |
+| `packages/ai/src/stages/runner.test.ts` | 12 — `tolerantJsonParse` (raw, fenced, prose-wrapped, array, empty, no-JSON), executeStage happy path with token-usage events, input-schema rejection (no LLM call, no retry), output schema retry (3 attempts → success), exhausted retries, model env override propagation |
+| `packages/ai/src/stages/triage.test.ts` | 9 — schema conformance against 5 NDA fixtures (nda-001/009/010/013/015), unknown-contract-type accepted, empty fullText rejected without LLM call, parties required (model omitting it triggers retry exhaustion), explicit empty parties accepted |
+| `packages/ai/src/stages/extract-clauses.test.ts` | 5 — vocabulary stays in sync with `kenya/nda.yaml`, schema parsing for typical response, empty fullText rejection, schema accepts empty clauses array, schema rejects clauses missing required fields |
+| `packages/ai/src/orchestrator.test.ts` | 4 — happy path through stages 1-4, degraded route uses Sonnet vision, unsupported contract type short-circuits before stage 4, PipelineEvents forwarded to caller-supplied sink |
 
-Cumulative: **260 tests passing** across 6 packages (+42 today).
-
-### DEFERRED.md hygiene
-
-Three items moved to **Completed** (per the deferred-tasks protocol):
-- **DEF-001**: Resend inbound MX on `ask.parasol.co.ke` — Tim verified today.
-- **DEF-005**: Voyage AI payment method — Tim added card; standard rate limits active. Sprint 1 fixture corpus (~1,116 chunks) embedded successfully.
-- **DEF-008**: Sentry PII scrubbing — completed Sprint 1 Day 1; framework-agnostic scrubber in `apps/web/src/lib/pii-scrub.ts` is wired to `beforeSend` in both Sentry configs.
-
-Remaining open items relevant to Sprint 1: DEF-009 (RLS continuous, applies forever), DEF-027 (dataset expansion), DEF-028 (counsel review of playbook + annotations — moved to v1-launch gate per Tim's instruction), DEF-043 (outbound delivery telemetry).
+Cumulative repo test count: **290 passing across 6 packages** (+30 today).
 
 ## Verification evidence
 
 ```
 pnpm turbo typecheck test lint
-→ 18 successful, 18 total
-→ Zero TS errors, zero lint warnings, 260 tests passing
-
-pnpm --filter @parasol/eval run eval -- --pipeline=stub-oracle --no-corpus
-→ All 5 NDAs scored, F1 = 1.000 across the board
-→ Acceptance bar: PASS
-
-pnpm --filter @parasol/eval run eval:gate
-→ eval gate PASS for sprint-1, exit 0
-
-pnpm --filter @parasol/eval run eval -- --pipeline=stub-noisy --no-corpus
-→ Aggregate F1 ≈ 0.50, citation validity = 0.50
-→ Acceptance bar: FAIL (clause F1 below 0.85, citation validity below 1.0)
-→ Diagnostics correctly identify missed / extra / invalid per NDA
+→ 18/18 successful
+→ Zero TS errors, zero lint warnings
+→ 290 tests passing across all packages
 ```
-
-Confirms the harness penalises the right things AND lets clean stubs through.
 
 ## Database state
 
-Unchanged from Day 5. All 6 statutes (~1,116 chunks) ingested with embeddings + tags. No new migrations today.
+Unchanged from Day 6. No migrations today; this work is purely orchestration / prompt / schema.
 
 ## What is NOT done
 
-- **Real-pipeline eval** — blocked by the production orchestrator (Day 9). Until then, `--pipeline=production` deliberately throws so a misconfigured CI gate can't silently pass under stub conditions. The `sprint-1.json` baseline currently in `packages/eval/results/` is from the stub-oracle pipeline (clearly labelled `pipeline: "stub"`); Day 13 overwrites with the production result.
-- **Hallucination check on real PDFs/DOCX** — disabled (sourceText: null) until Day 7 wires document extraction. The metric still works for plaintext fixtures and for the production runner (which will pass extracted text directly).
-- **Annotation counsel review** — same DEF-028 path as the playbook. Sprint 1 ships with `annotated_by: parasol-internal-draft`; absolute scores from production pipeline are best read as relative until counsel review.
-- **20-NDA full annotation set** — only 5 of 20 are annotated. The plan calls for 20 by Day 13. I'll annotate the remaining 15 incrementally over Days 7-13.
-- **Lawyer-rated redline appropriateness** — sampled at 20% per the plan; that's a manual scoring step that runs against actual production output. Day 13 task.
+- **Heavy reasoning stages (compare-playbook, generate-redline, verify-citations)** — Day 8.
+- **Assemble-output (DOCX tracked changes generation, email body)** — Day 9.
+- **Defined-terms-check** — Day 9.
+- **Real document intake plumbing** — PDF byte-extraction, DOCX-to-text, image rasterization for vision still need to land in `apps/web/src/lib/intake/`. The orchestrator accepts `PageInput` already; the pre-stage pipeline that produces `PageInput[]` from a Resend attachment is Day 9-10.
+- **Production end-to-end run on a real NDA** — needs all of the above. Day 13 reflows.
+- **Eval gate flipped to `--pipeline=production`** — Day 9 once the orchestrator is whole.
 
-## Exact next step (Day 7) — Pipeline stages 1-4 (the cheap Haiku stages)
+## Known issues / technical notes
 
-Day 7 plan from `docs/sprint-1-plan.md`:
-1. `packages/ai/src/prompts/quality-assess.ts` — per-page quality scoring (PageQuality output schema)
-2. `packages/ai/src/prompts/extract-text-clean.ts` — Haiku clean-PDF/DOCX extraction
-3. `packages/ai/src/prompts/extract-text-degraded.ts` — Sonnet vision extraction for scans / photos
-4. `packages/ai/src/prompts/triage.ts` — contract type + jurisdiction + parties identification
-5. `packages/ai/src/prompts/extract-clauses.ts` — structured clause decomposition
-6. `packages/ai/src/stages/` — one Stage per prompt (declares modelRole, runs the prompt with cache control, validates output schema)
-7. `packages/ai/src/orchestrator.ts` — shell of the orchestrator with stages 1-4 wired; stages 5-10 stub (return empty)
-8. Unit tests for triage stage output schema conformance against 5 NDA fixtures
+- The stage runner's retry-with-exponential-backoff is intentionally simple (250ms × 2^attempt). When real eval data shows 429s from Anthropic, Day 8+ may upgrade to honour `retry-after` headers. No DEFERRED entry yet; the existing simple backoff is fine until we observe a problem.
+- `quality-assess` currently uses a heuristic summary in its user template (text-char count + has-image flag) rather than full-page content. Cheap and probably good enough for Sprint 1; Day 13 eval will tell us if mis-routes are common.
+- The vocabulary in `extract-clauses.ts` is hard-coded to NDA. Day 8 (DPA/MSA/SaaS) doesn't ship in v1, but the structure already supports extending: add a per-contract-type vocabulary mapping when those playbooks land in Sprint 4+.
 
-Day 7 has no Tim action items.
+## Exact next step (Day 8) ⚠️ Voyage rerank-2 quota check (was DEF-005, now resolved)
+
+Day 8 plan from `docs/sprint-1-plan.md`:
+1. **`packages/ai/src/prompts/compare-playbook.ts`** — Sonnet prompt; playbook context cached; outputs clause-level deviation objects.
+2. **`packages/ai/src/prompts/generate-redline.ts`** — Sonnet prompt; playbook + corpus chunks cached; outputs issues + redline text + citations.
+3. **`packages/ai/src/prompts/verify-citations.ts`** — Sonnet + deterministic validator; every cited authority resolved in corpus.
+4. **`packages/ai/src/stages/{compare-playbook,generate-redline,verify-citations}.ts`** — wire prompts into the Stage interface using `executeStage`.
+5. **`packages/ai/src/citation-validator.ts`** — deterministic layer that re-resolves every citation against `corpus_documents` (CLAUDE.md hard requirement: "Anything claiming 'DPA 2019 s.40' must resolve in the corpus or the redline regenerates"). Drops confidence high → medium on citation failure; medium → manual_review.
+6. **Confidence calibration** wired through generate-redline → verify-citations.
+7. **Orchestrator extended** with stages 5-7 (and 6 retrieve-authority is deterministic-not-LLM, calling `retrieveAuthority` from `@parasol/corpus`).
+8. **Tim**: light-touch task — re-check Voyage AI dashboard once we run any meaningful retrievals (~Day 13). The original `sprint:1 day 8` Voyage quota check is now redundant since payment was added.
+
+Day 8 has no Tim action items beyond the optional dashboard check.
 
 ## Tim action items still open
 
-- **DEF-028** (counsel review): playbook + annotations both ship with `status: draft`. Production gate is v1 launch.
-- Optional: re-verify Voyage usage on the dashboard to confirm the eval suite + corpus ingestion stayed within the 200M-token free quota. We're under it but worth a check on Day 13 once eval has run in earnest.
+- **DEF-028** (counsel review of playbook + annotations): production gate is v1 launch. No immediate action.
+- **DEF-011** (.co.ug, .co.tz, .co.rw domain registration): was Day 1 task, status unknown to me. Not blocking Sprint 1.
