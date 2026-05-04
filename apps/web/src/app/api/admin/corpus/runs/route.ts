@@ -1,37 +1,41 @@
-/**
- * Admin API: corpus runs
- *
- * GET  /api/admin/corpus/runs              Recent ingestion run log (paginated)
- * GET  /api/admin/corpus/runs?source=:id   Filter to specific source
- * POST /api/admin/corpus/runs              Trigger manual run for a source
- *
- * SCAFFOLD STUB — Sprint 1 implements GET only.
- *
- * See: docs/admin-surfaces.md (Corpus Health surface), docs/corpus-pipeline.md
- */
+// GET /api/admin/corpus/runs — Day 12 implementation.
+//
+// Returns the most-recent corpus_ingestion_runs entries. Optional
+// ?source=<uuid> filter narrows to a single source. Used by the admin
+// dashboard's recent-runs panel; default limit (50) covers the last few
+// days of activity at Sprint 1 cadence.
 
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse, type NextRequest } from 'next/server'
+import { CorpusRepository } from '@parasol/corpus'
+import { requireAdmin } from '@/server/auth'
+import { createServerClient } from '@/lib/supabase/server'
+import { adminAuthErrorResponse } from '../sources/route'
 
-export async function GET(_req: NextRequest) {
-  // TODO Sprint 1: query corpus_runs table, latest 50 by default, optional
-  // ?source=<id> filter, ?limit=<n>, ?cursor=<id> for pagination.
-  // Return shape includes: run_id, source_id, started_at, completed_at, status,
-  // documents_added, documents_updated, documents_skipped, error_summary.
-  return NextResponse.json(
-    {
-      error: 'not_implemented',
-      message: 'Sprint 1 task. Implementation per docs/admin-surfaces.md.',
-    },
-    { status: 501 }
-  );
+export async function GET(req: NextRequest): Promise<NextResponse> {
+  try {
+    await requireAdmin()
+  } catch (cause) {
+    return adminAuthErrorResponse(cause)
+  }
+
+  const url = new URL(req.url)
+  const sourceId = url.searchParams.get('source') ?? undefined
+  const limitParam = url.searchParams.get('limit')
+  const limit = limitParam ? Math.max(1, Math.min(200, Number(limitParam))) : 50
+
+  const supabase = await createServerClient()
+  const corpus = new CorpusRepository(supabase)
+  const runs = await corpus.listRuns({ limit, sourceId })
+
+  return NextResponse.json({ runs }, { status: 200 })
 }
 
-export async function POST(_req: NextRequest) {
-  // Manual run trigger — Sprint 2 task. Requires job queue (consider Inngest or
-  // Supabase Edge Functions cron + pg_cron). DEFERRED.md DEF-018 for ingestion
-  // queue selection.
+export async function POST(_req: NextRequest): Promise<NextResponse> {
+  // Manual run trigger lives at /api/admin/corpus/sources/[id]/run, not
+  // here — keeping the URL ID-bound makes audit logs and idempotency
+  // easier to reason about.
   return NextResponse.json(
-    { error: 'not_implemented', message: 'Manual run trigger deferred to Sprint 2.' },
-    { status: 501 }
-  );
+    { error: 'not_implemented', message: 'Use POST /api/admin/corpus/sources/[id]/run.' },
+    { status: 501 },
+  )
 }

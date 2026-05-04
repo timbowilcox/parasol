@@ -1,132 +1,108 @@
-# Handoff: Sprint 1, Day 11 — Web upload UI + review page + persistence
+# Handoff: Sprint 1, Day 12 — Corpus admin UI complete
 
 Date: 2026-05-05
-Session type: Sprint 1 Day 11
+Session type: Sprint 1 Day 12
 
 ## What was completed
 
-Day 11 delivers the web-intake surface. Customers (and dev users) can now drop a contract at `/review/new`, get redirected to `/review/[id]`, watch the auto-refreshing status banner, and read the structured findings + download the redlined DOCX once processing completes. The relational tables (`extracted_clauses`, `issues`, `citations`) are now populated by the orchestrator's run so the review page renders without re-running the pipeline.
+Day 12 ships the corpus admin surface. parasol_admins land on `/admin/corpus` and see the live health summary, the sources table with status pills + last-run timestamps, the "Run now" button per source, and the recent-runs panel. Triggering a run kicks off an `ingestSource` execution in the background via `next/server.after()`, with `admin.corpus.run_triggered` and `admin.corpus.run_completed` (or `run_failed`) audit-log entries on either side.
 
-### Migration 0007 — review artefacts inline storage
+### CorpusRepository extensions (`packages/corpus/src/repository.ts`)
 
-Adds three columns to `reviews`:
-- `redline_docx_base64 text` — the DOCX bytes encoded inline. Sprint 1 NDAs are 5-50 KB; comfortably under Postgres row limits. v2 migrates to Supabase Storage (DEF-048 — new this session).
-- `web_view_json jsonb` — the assembled web view payload (`AssembledOutput.webView`). Hydrates `/review/[id]` without re-running the orchestrator.
-- `email_body_json jsonb` — `{ subjectSuffix, plainText, html }` exactly as sent in the Resend reply. Audit trail for the email path.
+- **`listRuns({ limit?, sourceId? })`** — recent ingestion runs, newest first, default 50, optional per-source filter. Used by both the runs panel and the future `/api/admin/corpus/runs` consumer.
+- **`healthSummary()`** — aggregate metrics for the dashboard top card. Uses Postgres `count: 'exact', head: true` to avoid streaming rows; classifies `status` into `healthy` (`healthy` + `idle`) and `errored` (`error` + `warning`) buckets so the surface highlights what needs operator attention.
 
-### Persistence repositories (`packages/core/src/repositories/review-content.ts`)
+### Admin audit helper (`apps/web/src/server/audit.ts`)
 
-`ExtractedClauseRepository`, `IssueRepository`, `CitationRepository` — each with `insertMany(rows)` returning the inserted rows (so the caller can chain insert citations against newly-issued issue IDs) and a `listForReview(id)` / `listForIssues(issueIds)` reader. Empty-input fast paths short-circuit Supabase calls. `ReviewRepository.updateAssembled()` writes the three new artefact columns in a single update.
+`logAdminEvent({ supabase, actorId, workspaceId, action, resourceType?, resourceId?, payload?, ipAddress?, userAgent? })` wraps `AuditRepository.appendEvent` and **swallows errors** — an audit-write failure must not abort the underlying admin operation, but it must be loud (logs to `console.error`). `extractRequestContext({ headers })` pulls the IP from the first X-Forwarded-For entry and the User-Agent for forensic context. Both null-safe.
 
-### `processReview` refactor — discriminated attachment source
+### API routes (auth-gated to parasol_admin → 404 on non-admin)
 
-The Day 10 helper signature was email-specific. Day 11 generalises:
+- **`GET /api/admin/corpus/sources`** — returns the configured corpus_sources. POST returns 501 (deferred to Sprint 2 per the playbook-coverage matrix gate).
+- **`GET /api/admin/corpus/runs?source=<id>&limit=<n>`** — recent runs with optional source filter; limit clamped to [1, 200] with default 50.
+- **`POST /api/admin/corpus/sources/[id]/run`** — auth-guarded run-now trigger. Resolves the source by id, looks up a Scraper for its slug (Sprint 1 only registers `kenya-acts` → KenyaLawScraper; ODPC + KRA register here as they ship), writes a `admin.corpus.run_triggered` audit row before the response, then invokes `ingestSource` via `after()`. The completion path writes `admin.corpus.run_completed` (or `_failed`) with the document add/update counts in the payload. Skips embedding/tagging when the relevant API key isn't configured — Sprint 1 escape hatch for dev environments without Voyage / Anthropic keys.
 
-```ts
-type AttachmentSource =
-  | { kind: 'email'; inboundEmailId; attachmentId; filename }
-  | { kind: 'inline'; bytes; mimeType; filename }
+CLAUDE.md routing: all admin routes return `404` (not `403`) for non-admins. Both `UnauthorisedError` and `ForbiddenError` are mapped to 404 via `adminAuthErrorResponse`.
 
-type ProcessReviewInput = {
-  supabase, reviewId, workspaceId, attachment: AttachmentSource,
-  replyEmail?: { replyTo, emailMessageId, originalSubject }
-}
-```
+### `/admin/corpus` page (`apps/web/src/app/admin/corpus/page.tsx`)
 
-Email path: `attachment.kind === 'email'` + `replyEmail` set → fetches via Resend + sends reply. Web path: `attachment.kind === 'inline'` (bytes already in hand from the multipart upload) + no `replyEmail` → no reply email is sent; the `/review/[id]` page surfaces the result. Both paths run the same orchestrator and persist via `persistOutputs` (clauses → issues → citations → assembled artefacts on the review row).
+Replaces the Day 1 stub. Server component reading via `CorpusRepository` directly (no API round-trip needed in-process). Renders:
 
-### Web pages
+- Stats summary row — Documents, Chunks, Healthy sources, Errored
+- Sources table — name + slug (mono), jurisdiction, status pill, document count, relative last-run time, "Run now" button
+- Recent runs table — source slug, started time, status pill, documents added / updated, error count, run duration
 
-- **Root `/` (`apps/web/src/app/page.tsx`)** — Sprint 1 placeholder linking to `/review/new` and `/admin/corpus`.
-- **`/login`** — Sprint 1 stub. Real auth lands Sprint 2; this page documents the redirect target so `requireAuth()` doesn't 404 in dev.
-- **`/review/new`** — server component (auth guard via `requireAuth`) + client `UploadDropzone` component. Drag-drop + click-to-browse; client-side validation of MIME + extension + 10 MB cap; posts multipart to `/api/upload`; redirects to `/review/[id]` on 202.
-- **`/review/[id]`** — server component, RLS-scoped lookup. Branches on `review.status`:
-  - `pending` / `processing` → `<meta http-equiv="refresh" content="5">` polls until completion (DEF-049 replaces with SSE/RSC streaming for v1 launch).
-  - `failed` → status banner with `error_message` + retry CTA.
-  - `unsupported` → status banner explaining what Sprint 1 supports + retry CTA.
-  - `completed` → severity summary + per-issue cards (severity pill / clause id / confidence dot / current → recommended → reasoning → proposed redline → cited authority with `validated`/`unverified` styling) + extracted-clause reference list + "Download redlined .docx" button.
+The `RunNowButton` is a client component that posts to the run-now endpoint and calls `router.refresh()` on 202 so the runs panel reflects the new in-flight row.
 
-### Layout + design system (`apps/web/src/app/layout.tsx`, `globals.css`)
+`globals.css` extended with an `.admin-table` style (warm-grey header band, 0.5px row dividers, 14px body font). Severity pill classes are reused for the status indicators — corpus health is genuinely a severity-coded state.
 
-Root layout shipping the BRAND.md-aligned design tokens: warm-white surfaces (`#F1EFE8` page background, `#FFFFFF` card primary), severity ramp pairs as CSS custom properties, sentence-case throughout, no decorative amber, two type weights only (400 / 500), serif page titles + sans body + mono citations. Components reference token names (`--bg-primary`, `--critical-fill`, `--font-serif`) so the dark-mode pass (Sprint 6+) is a single root-rule swap.
-
-### API routes
-
-- **`POST /api/upload`** — auth-guarded multipart handler. Validates type / size / extension; creates the `reviews` row scoped to the caller's workspace; reads bytes once and hands off to `processReview` via `next/server.after()`. `maxDuration = 120` matches the email path. Returns `{ reviewId }` for the dropzone to redirect against.
-- **`GET /api/review/[id]/redline.docx`** — auth-guarded redline download. Decodes the inline base64 column and streams it back with `Content-Type: ...wordprocessingml.document` + `Content-Disposition: attachment; filename="<original>-redlined.docx"` + `Cache-Control: private, no-store`. Returns 404 with `redline_unavailable` when the review hasn't completed.
-
-### Email route handler updates
-
-The Day 10 inbound webhook handler updated to use the new `processReview` shape — `attachment: { kind: 'email', ... }` + `replyEmail: { ... }`. No behaviour change.
-
-## Tests added (16 new — apps/web 86 → 96, core 60 → 66)
+## Tests added (24 new — corpus 63 → 68, web 96 → 115)
 
 | Suite | Tests |
 |-------|-------|
-| `packages/core/src/repositories/review-content.test.ts` | 6 — ExtractedClauseRepo (empty-input fast path, happy-path insert, error rethrow), IssueRepo (returns inserted rows for citation-foreign-key chaining), CitationRepo (empty-input fast path, `.in('issue_id', ids)` query) |
-| `apps/web/src/app/api/upload/route.test.ts` | 6 — happy-path PDF upload (review created + processReview invoked with correct shape), missing-file 400, unsupported-MIME 415, file-too-large 413, empty-file 400, octet-stream + .docx filename → resolved DOCX MIME |
-| `apps/web/src/app/api/review/[id]/redline.docx/route.test.ts` | 4 — happy-path 200 with bytes + content-disposition, 404 on missing review, 404 on review not yet completed, fallback filename when original is null |
+| `packages/corpus/src/repository.test.ts` | 5 — `listRuns` (default order/limit, `sourceId` filter, error rethrow), `healthSummary` (aggregation + status bucketing, error rethrow) |
+| `apps/web/src/server/audit.test.ts` | 6 — `logAdminEvent` (forwards full input shape, swallows persistence errors with console.error, defaults null fields), `extractRequestContext` (XFF first-entry, no headers, single-IP) |
+| `apps/web/src/app/api/admin/corpus/sources/route.test.ts` | 4 — happy path admin GET, UnauthorisedError → 404, ForbiddenError → 404, POST returns 501 |
+| `apps/web/src/app/api/admin/corpus/runs/route.test.ts` | 4 — default limit 50, `?source=` + `?limit=` passthrough, limit clamped to 200, non-admin 404 |
+| `apps/web/src/app/api/admin/corpus/sources/[id]/run/route.test.ts` | 5 — happy path (run_triggered audit + ingestSource invoked + run_completed audit), unknown source → 404, no scraper for slug → 422, ingestSource throw → run_failed audit, non-admin 404 |
 
-Cumulative repo test count: **400 passing across 6 packages** (+16 today).
+Cumulative repo test count: **424 passing across 6 packages** (+24 today).
 
 | Package | Tests |
 |---------|-------|
-| `@parasol/core` | 66 (+6) |
+| `@parasol/core` | 66 |
 | `@parasol/playbooks` | 38 |
 | `@parasol/eval` | 42 |
-| `@parasol/web` | 96 (+10) |
-| `@parasol/corpus` | 63 |
+| `@parasol/web` | 115 (+19) |
+| `@parasol/corpus` | 68 (+5) |
 | `@parasol/ai` | 95 |
 
 ## Verification evidence
 
 ```
 pnpm turbo typecheck test lint --force
-→ 18/18 successful, 400 tests passing
+→ 18/18 successful, 424 tests passing
 → Zero TS errors, zero lint warnings
 ```
 
-## Schema relaxation: SupabaseClient generic
-
-`packages/core/src/repositories/types.ts` widens the `SupabaseClient` re-export from `SupabaseClient<Database>` (2-param) to `SupabaseClient<Database, any, any>` (loose) so the SSR client from `@supabase/ssr` (which surfaces a 5-param generic with a resolved schema literal) can be passed to repositories without a cast. Both clients have the same runtime surface; the looser generic just stops TypeScript from rejecting one when the other is expected.
-
-This change touched `process-review.ts` and `pipeline-events.ts` to import `SupabaseClient` from `@parasol/core` instead of `@supabase/supabase-js`.
-
 ## What is NOT done
 
-- **Real Supabase Auth sign-in flow** — `/login` is a stub. Sprint 2 wires email magic link + OAuth (Microsoft, Google) per CLAUDE.md's auth section.
-- **Server-Sent Events / RSC streaming progress** — DEF-049 (new). The 5-second meta-refresh polling is the Sprint 1 floor; it's annoying but functional.
-- **Supabase Storage migration for redline bytes** — DEF-048 (new). Inline base64 works for Sprint 1 NDAs; bigger contracts in v2 would need this.
-- **Audit log entries for upload + review events** — the per-stage audit-log writes are pending. Day 12 has slack to add `review.created` / `review.completed` rows; if not, post-launch hardening picks it up.
-- **Live forward test on a real NDA via the web upload** — needs deployment. Day 13 smoke test will exercise this.
-- **Multi-attachment uploads** — single-file Sprint 1; cover-sheet + contract bundles are deferred.
+- **Streaming run progress in the UI** — the Run Now button + `router.refresh()` shows the new in-flight row but doesn't stream document-by-document progress. DEF-049 (SSE / RSC streaming, deferred from Day 11) covers both surfaces (review polling + admin runs).
+- **Source creation / editing UI** — `POST /api/admin/corpus/sources` returns 501. Sprint 1 ships read-only + run-now; new sources land in Sprint 2 alongside the playbook-coverage matrix.
+- **Scheduled cron path** — DEF-017 / DEF-018 cover daily incremental + weekly Gazette diff. Day 12 ships only the manual trigger.
+- **Pending-diff review screen** — DEF-019 (`/admin/corpus/diffs`). The diff queue is captured by ingestion but no UI exists yet.
+- **Source-level circuit breakers / Slack alerting** — DEF-020.
+- **`new KenyaLawScraper()` constructed without env-tuned `politeFetch` options** — Sprint 1 dev runs use the default 2-second polite-interval. For production-cron runs we'll want to thread through a configured fetcher; small change when DEF-017 lands.
 
 ## Known issues / technical notes
 
-- **Polling vs streaming**: the meta-refresh approach reloads the whole page every 5 seconds. In a live deployment this triggers a fresh server round-trip + RLS check per refresh, which is fine for the dev volume but should be replaced before public launch (DEF-049).
-- **`extracted_clause_id` is null on issues**: the orchestrator's `PipelineIssue.clauseId` is a string clause id, not the inserted row's UUID. Linking issues to clauses by FK would require a second pass (insert clauses, build a `clauseId → uuid` map, then insert issues). Sprint 1 leaves the FK null and joins on the string `clause_id` for the review page. The schema-level FK column is preserved for v2.
-- **`source_url` is null on inserted citations**: `PipelineCitation` doesn't carry a URL today. The verify-citations step resolves canonical IDs to corpus rows but doesn't propagate the source URL through to the issue model. Day 12 polish or DEF-049-adjacent work can backfill from `corpus_documents.source_url`.
-- **`inline` bytes path doesn't fail-soft on overlarge files post-upload**: the multipart handler enforces 10 MB at upload time; once `processReview` is on the after-response side, an in-memory copy of the bytes lives until extract-pages finishes. Vercel function memory caps (1 GB on Pro) are far above this; just noting the model.
-- **Top of `/review/[id]` shows "Completed" banner even on zero-issue reviews**: that's intentional — a clean contract is a successful review, not nothing. Issue list shows "No issues identified against the playbook."
+- **Auth surface for non-admins is 404 by design** (CLAUDE.md). Both "not signed in" and "signed in but not admin" return 404 — the existence of the admin surface should not be discoverable from the public app. Admin tests verify both branches.
+- **`status === 'running'` disables the Run Now button** but doesn't free the lock — if a run gets stuck the source stays disabled until an admin manually updates the row. DEF-020 (circuit breakers + alerting) is the right place for the recovery flow.
+- **Health summary is not cached**: every page load runs three queries against `corpus_documents`, `corpus_chunks`, `corpus_sources`. With Sprint 1 row counts this is fine; once the corpus crosses 50k chunks we should memo this with a 60-second TTL or move to a materialised view.
+- **Source slug → scraper mapping is hardcoded in `makeScraper()`**: a switch statement in the run-now route. As we add scrapers (ODPC, KRA, CBK) each registers here. There's no plugin discovery — intentional, since each scraper has bespoke handling (Akoma Ntoso for Kenya Law, PDF extraction for ODPC, etc.).
+- **Background runs don't surface failures back to the user**: if `ingestSource` throws after the response has flushed, the user has to refresh and read the runs panel. The `admin.corpus.run_failed` audit row is the durable record. SSE streaming (DEF-049) closes this.
 
 ## Database state
 
-Migration 0007 added: `reviews.redline_docx_base64`, `reviews.web_view_json`, `reviews.email_body_json`. `db.ts` updated with the new columns + the existing `extracted_clauses`, `issues`, `citations` table types (these were always in 0003 but hadn't been declared in `db.ts` because no app code touched them until today).
+No migrations today. Day 11's migration 0007 is still pending Tim's `pnpm db:migrate` for the dev project.
 
-Tim — when convenient, run `pnpm db:migrate` to apply 0007 to the dev project. The web upload flow will fail on the `updateAssembled` step until it lands.
+## Exact next step (Day 13) — Eval harness acceptance bar
 
-## Exact next step (Day 12) — Corpus admin UI complete
+Day 13 plan from `docs/sprint-1-plan.md`:
+1. **All 20 NDAs annotated** in `packages/eval/data/golden/nda/` — Tim's golden dataset (sourced Day 3) with manual ground-truth labels for clause identification + expected playbook deviations + cited authority.
+2. **`pnpm eval` full run** producing the Sprint 1 acceptance metrics:
+   - ≥85% clause identification F1
+   - ≥80% redline appropriateness (rubric scoring)
+   - <2% hallucination rate
+   - 100% citation validity
+3. **Results committed to `packages/eval/results/sprint-1.json`**
+4. **Latency measurements** on 3 representative NDAs (target: 60s p95)
 
-Day 12 plan from `docs/sprint-1-plan.md`:
-1. **`apps/web/src/app/admin/corpus/page.tsx`** — replace the Day 1 stub with the real implementation: health summary card, sources list with per-source status / last_run_at / document_count, recent runs panel, "Run now" button per source.
-2. **`apps/web/src/app/api/admin/corpus/sources/route.ts`** — GET sources list (currently a stub returning [])
-3. **`apps/web/src/app/api/admin/corpus/runs/route.ts`** — GET recent runs
-4. **`apps/web/src/app/api/admin/corpus/sources/[id]/run/route.ts`** — POST triggers `runIngestion()` from `@parasol/corpus`
-5. All admin actions write `audit_log` entries namespaced `admin.corpus.*`
-6. UI matches the parasol_corpus_admin design from chat artefacts (2026-05-03)
+Day 13 also reflects on whether to (a) re-introduce parallel stage 9 (deferred from Day 9), (b) tighten `maxDuration` from 120 back to 60 on the route handlers, and (c) measure citation-validity-rate against the live corpus to set the v1 acceptance bar for Sprint 8.
 
 ## Tim action items
 
 - **DEF-028** (counsel review of playbook + annotations): production gate is v1 launch.
 - **DEF-011** (.co.ug, .co.tz, .co.rw domain registration): not blocking Sprint 1.
-- **`pnpm db:migrate`** to apply migration 0007 to the dev project — required before the web upload flow can complete a review end-to-end. Email path continues to work without it (the persist step would fail on the assembled-update column write but the reply send is independent).
+- **`pnpm db:migrate`** — apply migration 0007 (still outstanding from Day 11). Web upload flow needs this; email path runs without it but loses inline artefact storage.
+- **20 annotated NDAs** for Day 13 eval — sourced Day 3, but the per-document ground-truth labels still need a pass before the eval harness can compute F1.

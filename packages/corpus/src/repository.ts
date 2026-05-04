@@ -107,6 +107,58 @@ export class CorpusRepository extends BaseRepository {
     if (error) throw error
   }
 
+  // List recent ingestion runs across all sources, newest first. Used by
+  // the /admin/corpus dashboard's recent-runs panel. The default limit (50)
+  // covers the last week or so of activity at Sprint 1 cadence; callers can
+  // narrow further with `sourceId`.
+  async listRuns(options: {
+    limit?: number
+    sourceId?: string
+  } = {}): Promise<CorpusIngestionRun[]> {
+    let query = this.supabase
+      .from('corpus_ingestion_runs')
+      .select('*')
+      .order('started_at', { ascending: false })
+      .limit(options.limit ?? 50)
+    if (options.sourceId) {
+      query = query.eq('source_id', options.sourceId)
+    }
+    const { data, error } = await query
+    if (error) throw error
+    return data ?? []
+  }
+
+  // Aggregate health metrics for the admin dashboard's summary card.
+  // Counts are exact (Postgres `count: 'exact', head: true` returns the
+  // total without payload). Cheaper than `select('*').length` because no
+  // rows are streamed.
+  async healthSummary(): Promise<{
+    totalDocuments: number
+    totalChunks: number
+    healthySources: number
+    erroredSources: number
+  }> {
+    const [docs, chunks, sources] = await Promise.all([
+      this.supabase.from('corpus_documents').select('*', { count: 'exact', head: true }),
+      this.supabase.from('corpus_chunks').select('*', { count: 'exact', head: true }),
+      this.supabase.from('corpus_sources').select('status'),
+    ])
+    if (docs.error) throw docs.error
+    if (chunks.error) throw chunks.error
+    if (sources.error) throw sources.error
+
+    const sourceRows = (sources.data ?? []) as Array<{ status: string }>
+    const healthy = sourceRows.filter((s) => s.status === 'healthy' || s.status === 'idle').length
+    const errored = sourceRows.filter((s) => s.status === 'error' || s.status === 'warning').length
+
+    return {
+      totalDocuments: docs.count ?? 0,
+      totalChunks: chunks.count ?? 0,
+      healthySources: healthy,
+      erroredSources: errored,
+    }
+  }
+
   // ─── Documents ──────────────────────────────────────────────────────────
 
   // Returns the existing document for (source_type, jurisdiction, canonical_id)
