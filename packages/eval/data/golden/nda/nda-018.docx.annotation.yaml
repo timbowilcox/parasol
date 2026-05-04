@@ -1,0 +1,38 @@
+# Indevus / Endo Pharmaceuticals one-way NDA (US, M&A, 2009).
+# Confidentiality agreement filed as part of Endo's acquisition of Indevus.
+# Converted from EDGAR HTML to DOCX.
+
+filename: nda-018.docx
+annotated_at: 2026-05-05
+annotated_by: "parasol-internal-draft"
+notes: |
+  US M&A one-way NDA. Pharmaceutical industry context; same critical
+  jurisdictional profile as the other US M&A NDAs.
+
+expected_issues:
+  - clause_id: governing_law
+    severity: critical
+    description: "US-governed; outside Kenya playbook hard-limit set."
+    required: true
+    expected_confidence: high
+  - clause_id: dispute_resolution
+    severity: critical
+    description: "US courts default; playbook standard is NCIA arbitration."
+    required: true
+    expected_confidence: high
+  - clause_id: data_protection
+    severity: critical
+    description: "Pre-DPA 2019 NDA; no Kenya processor obligations or cross-border transfer mechanism."
+    required: true
+    expected_confidence: high
+  - clause_id: confidentiality_term
+    severity: minor
+    description: "M&A 2-year term; playbook fallback covers."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "2013/26"

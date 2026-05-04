@@ -1,0 +1,40 @@
+# Next Group Holdings mutual NDA (US, M&A).
+# Standard US M&A NDA with no Kenya-aware language.
+
+filename: nda-004.pdf
+annotated_at: 2026-05-05
+annotated_by: "parasol-internal-draft"
+notes: |
+  US M&A mutual NDA. Same critical jurisdiction profile as the other US
+  M&A NDAs in the dataset.
+
+expected_issues:
+  - clause_id: governing_law
+    severity: critical
+    description: "US-governed; outside Kenya playbook hard-limit set."
+    required: true
+    expected_confidence: high
+  - clause_id: dispute_resolution
+    severity: critical
+    description: "US courts default; playbook standard is NCIA arbitration."
+    required: true
+    expected_confidence: high
+  - clause_id: data_protection
+    severity: critical
+    description: "No DPA 2019 processor obligations or cross-border transfer mechanism."
+    required: true
+    expected_confidence: high
+  - clause_id: remedies
+    severity: material
+    description: "US-style equitable-relief language; injunctive relief without bond may misalign with Kenyan civil procedure."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.42"
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "2013/26"

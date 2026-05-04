@@ -1,0 +1,41 @@
+# SuccessFactors / SAP mutual NDA (US, M&A acquisition, 2011).
+# Same year-after pattern as nda-005 — SAP acquiring another US company.
+
+filename: nda-006.pdf
+annotated_at: 2026-05-05
+annotated_by: "parasol-internal-draft"
+notes: |
+  Mutual NDA for the SAP acquisition of SuccessFactors. US-governed
+  despite the German-American multinational pairing. Same profile as
+  nda-005.
+
+expected_issues:
+  - clause_id: governing_law
+    severity: critical
+    description: "US-governed; outside Kenya playbook hard-limit set."
+    required: true
+    expected_confidence: high
+  - clause_id: dispute_resolution
+    severity: critical
+    description: "US courts default; playbook standard is NCIA arbitration."
+    required: true
+    expected_confidence: high
+  - clause_id: data_protection
+    severity: critical
+    description: "Pre-DPA 2019 NDA; no Kenya-aware processor obligations or cross-border transfer language."
+    required: true
+    expected_confidence: high
+  - clause_id: remedies
+    severity: material
+    description: "US-style equitable relief; bond / injunction language may misalign with Kenyan civil procedure."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.42"
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "2013/26"

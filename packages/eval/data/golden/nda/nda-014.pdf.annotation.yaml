@@ -1,0 +1,31 @@
+# UK National Archives NDA template (UK).
+# UK public-body template. Multi-page; commercial-friendly language.
+
+filename: nda-014.pdf
+annotated_at: 2026-05-05
+annotated_by: "parasol-internal-draft"
+notes: |
+  UK public-body NDA template. England & Wales governing law (within
+  playbook fallback set); commercial language closer to standard than
+  the Dstl template (nda-012).
+
+expected_issues:
+  - clause_id: dispute_resolution
+    severity: material
+    description: "English court jurisdiction; playbook fallback is LCIA arbitration."
+    expected_confidence: medium
+  - clause_id: data_protection
+    severity: material
+    description: "UK GDPR-aware but not Kenya DPA 2019-aware; cross-border transfer mechanism may need adjustment for Kenyan counterparty."
+    expected_confidence: medium
+  - clause_id: return_or_destruction
+    severity: minor
+    description: "UK templates often use 'reasonable period' rather than the playbook's 30-day standard."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "2013/26"

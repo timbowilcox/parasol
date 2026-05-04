@@ -1,0 +1,39 @@
+# CarMax confidentiality agreement (form, US-Virginia, 2002).
+# S-1-filed form of confidentiality agreement. Older template — pre-DPA
+# 2019, pre-much-of-modern-data-protection landscape.
+
+filename: nda-019.docx
+annotated_at: 2026-05-05
+annotated_by: "parasol-internal-draft"
+notes: |
+  CarMax form NDA from a 2002 S-1 filing. Virginia-governed (a US state
+  outside the playbook hard-limit set). Older template lacks any
+  modern data-protection language.
+
+expected_issues:
+  - clause_id: governing_law
+    severity: critical
+    description: "Virginia-governed; outside Kenya playbook hard-limit set."
+    required: true
+    expected_confidence: high
+  - clause_id: dispute_resolution
+    severity: critical
+    description: "US courts default; playbook standard is NCIA arbitration."
+    required: true
+    expected_confidence: high
+  - clause_id: data_protection
+    severity: critical
+    description: "2002-era template; no DPA 2019 obligations or cross-border transfer mechanism."
+    required: true
+    expected_confidence: high
+  - clause_id: confidentiality_term
+    severity: material
+    description: "Older US templates often run 5-year terms; playbook standard 3, fallback 2."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "2013/26"

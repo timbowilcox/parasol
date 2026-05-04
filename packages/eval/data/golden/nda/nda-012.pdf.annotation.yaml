@@ -1,0 +1,35 @@
+# UK Dstl (Defence Science and Technology Laboratory) NDA template (UK).
+# Multi-page government-defence context. Deeply non-standard for
+# commercial use — exercises the pipeline's robustness on contracts that
+# don't map cleanly to the playbook.
+
+filename: nda-012.pdf
+annotated_at: 2026-05-05
+annotated_by: "parasol-internal-draft"
+notes: |
+  UK MoD Dstl secondee NDA. Defence-context language with security
+  classification, Crown copyright, and Official Secrets Act references.
+  The pipeline should still surface jurisdictional flags but may flag
+  out-of-scope clauses (security classification) as 'unknown_*' rather
+  than mapping them to playbook entries — that's expected behaviour.
+
+expected_issues:
+  - clause_id: dispute_resolution
+    severity: material
+    description: "English court jurisdiction; playbook fallback is LCIA arbitration."
+    expected_confidence: medium
+  - clause_id: data_protection
+    severity: material
+    description: "UK GDPR-aware but not Kenya DPA 2019-aware."
+    expected_confidence: medium
+  - clause_id: confidentiality_term
+    severity: minor
+    description: "Defence NDAs often run open-ended (no expiry); playbook expects bounded term."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "2013/26"

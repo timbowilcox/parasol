@@ -1,0 +1,50 @@
+# NCR Corp tender-offer confidentiality agreement (one-way, US, signed).
+# Long-form M&A NDA filed as part of 14D-9 disclosures. Same broad pattern
+# as nda-001 (US-governed, M&A context) but one-way rather than mutual.
+
+filename: nda-002.pdf
+annotated_at: 2026-05-05
+annotated_by: "parasol-internal-draft"
+notes: |
+  Real signed US M&A confidentiality agreement, NCR Corporation. Long
+  document with multiple representations and warranties. Same critical
+  jurisdiction conflicts as nda-001; additional material flags expected
+  on remedies (US-style equitable-relief language) and term length.
+
+expected_issues:
+  - clause_id: governing_law
+    severity: critical
+    description: "US-governed; falls outside Kenya playbook hard-limit jurisdictions (Kenya/UK/Singapore/Mauritius/NY only)."
+    required: true
+    expected_confidence: high
+  - clause_id: dispute_resolution
+    severity: critical
+    description: "US courts default; playbook standard is NCIA arbitration with Nairobi seat."
+    required: true
+    expected_confidence: high
+  - clause_id: data_protection
+    severity: critical
+    description: "No DPA 2019 processor obligations or cross-border transfer mechanism."
+    required: true
+    expected_confidence: high
+  - clause_id: remedies
+    severity: material
+    description: "US-style equitable-relief language; bond requirement may exceed Kenyan civil procedure norms."
+    expected_confidence: medium
+  - clause_id: confidentiality_term
+    severity: minor
+    description: "M&A standard is 2-year term; playbook standard is 3 years (fallback covers 2)."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.42"
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "2013/26"
+  - source: kenya-statute
+    id: "1995/4"
+    section: "s.36"

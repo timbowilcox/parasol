@@ -1,0 +1,39 @@
+# DOBI Medical mutual NDA (US, 2005).
+# Originally a plain-text SGML EDGAR filing; converted to DOCX. Tests the
+# pipeline's text-only extraction path on a contract that has no native
+# rich-format origin.
+
+filename: nda-020.docx
+annotated_at: 2026-05-05
+annotated_by: "parasol-internal-draft"
+notes: |
+  Plain-text-origin US mutual NDA, converted to DOCX. Same critical
+  jurisdictional profile as the other US NDAs in the dataset.
+
+expected_issues:
+  - clause_id: governing_law
+    severity: critical
+    description: "US-governed; outside Kenya playbook hard-limit set."
+    required: true
+    expected_confidence: high
+  - clause_id: dispute_resolution
+    severity: critical
+    description: "US courts default; playbook standard is NCIA arbitration."
+    required: true
+    expected_confidence: high
+  - clause_id: data_protection
+    severity: critical
+    description: "2005-era template; no DPA 2019 obligations or cross-border transfer mechanism."
+    required: true
+    expected_confidence: high
+  - clause_id: confidentiality_term
+    severity: minor
+    description: "Older US templates often 5-year; playbook standard 3, fallback 2."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "2013/26"

@@ -1,0 +1,31 @@
+# UK gov.uk Example One-Way NDA (template, UK).
+# Sister document to nda-010; one-way rather than mutual.
+
+filename: nda-011.pdf
+annotated_at: 2026-05-05
+annotated_by: "parasol-internal-draft"
+notes: |
+  Clean UK one-way NDA template. Same jurisdictional profile as nda-010
+  (England & Wales is within Kenya playbook fallback set). One-way
+  structure may surface return/destruction asymmetries.
+
+expected_issues:
+  - clause_id: dispute_resolution
+    severity: material
+    description: "English court jurisdiction; playbook fallback is LCIA arbitration."
+    expected_confidence: medium
+  - clause_id: data_protection
+    severity: material
+    description: "UK GDPR-aware but not Kenya DPA 2019-aware; cross-border transfer mechanism may need adjustment."
+    expected_confidence: medium
+  - clause_id: confidentiality_term
+    severity: minor
+    description: "UK templates commonly use 5-year term; playbook standard is 3, fallback is 2."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "2013/26"

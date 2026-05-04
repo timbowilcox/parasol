@@ -1,0 +1,49 @@
+# Vocus / GTCR mutual NDA (US, M&A, 2014).
+# Private-equity acquisition NDA filed as part of 14D-9 disclosures.
+# Long-form with multiple PE-specific representations.
+
+filename: nda-008.pdf
+annotated_at: 2026-05-05
+annotated_by: "parasol-internal-draft"
+notes: |
+  Long mutual NDA filed for the GTCR acquisition of Vocus. PE-style
+  language; same critical jurisdictional profile as the other US M&A
+  NDAs.
+
+expected_issues:
+  - clause_id: governing_law
+    severity: critical
+    description: "US-governed; outside Kenya playbook hard-limit set."
+    required: true
+    expected_confidence: high
+  - clause_id: dispute_resolution
+    severity: critical
+    description: "US courts default; playbook standard is NCIA arbitration."
+    required: true
+    expected_confidence: high
+  - clause_id: data_protection
+    severity: critical
+    description: "No DPA 2019 processor obligations or cross-border transfer mechanism."
+    required: true
+    expected_confidence: high
+  - clause_id: remedies
+    severity: material
+    description: "US-style equitable relief; bond requirement may misalign with Kenyan civil procedure."
+    expected_confidence: medium
+  - clause_id: confidentiality_term
+    severity: minor
+    description: "M&A standard 2 years; playbook fallback covers."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.42"
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "2013/26"
+  - source: kenya-statute
+    id: "1995/4"
+    section: "s.36"

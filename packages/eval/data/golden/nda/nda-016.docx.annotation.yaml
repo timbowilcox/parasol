@@ -1,0 +1,41 @@
+# Common Paper One-Way NDA template (DOCX, US-Delaware default).
+# One-way variant of the Common Paper template (which is also represented
+# in the dataset as nda-009.pdf and nda-015.docx mutual versions).
+
+filename: nda-016.docx
+annotated_at: 2026-05-05
+annotated_by: "parasol-internal-draft"
+notes: |
+  Common Paper one-way NDA in DOCX form. Delaware-governed default; same
+  critical jurisdictional profile as nda-009/nda-015 but one-way structure
+  means asymmetric obligations on the Receiving Party only.
+
+expected_issues:
+  - clause_id: governing_law
+    severity: critical
+    description: "Delaware-governed default; outside Kenya playbook hard-limit set."
+    required: true
+    expected_confidence: high
+  - clause_id: dispute_resolution
+    severity: critical
+    description: "Delaware courts default; playbook standard is NCIA arbitration."
+    required: true
+    expected_confidence: high
+  - clause_id: data_protection
+    severity: critical
+    description: "Generic US template; no DPA 2019 obligations or cross-border transfer mechanism."
+    required: true
+    expected_confidence: medium
+  - clause_id: counterparts_and_execution
+    severity: minor
+    description: "DOCX format suggests electronic execution; playbook expects KICA-aware language."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "1998/2"
+  - source: kenya-statute
+    id: "2013/26"

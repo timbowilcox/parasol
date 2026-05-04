@@ -1,0 +1,44 @@
+# UN-Habitat (Nairobi HQ) two-way NDA template (DOCX).
+# Originally a .doc from the UN-Habitat headquarters in Nairobi; converted
+# to DOCX. International-organisation context; governing law typically
+# defers to UN immunities rather than a local jurisdiction.
+
+filename: nda-017.docx
+annotated_at: 2026-05-05
+annotated_by: "parasol-internal-draft"
+notes: |
+  UN-Habitat NDA template. UN agreements typically reference the
+  Convention on the Privileges and Immunities of the United Nations
+  rather than a local governing law — falls outside the playbook's
+  contract-vs-statute frame. Expect the pipeline to flag governing-law
+  as unusual (manual_review_recommended) and surface DPA 2019 + KICA
+  gaps because the document is Kenya-headquartered.
+
+expected_issues:
+  - clause_id: governing_law
+    severity: material
+    description: "UN agreements often invoke organisational immunities rather than a national jurisdiction; playbook has no clean mapping. Manual review."
+    expected_confidence: manual_review_recommended
+  - clause_id: dispute_resolution
+    severity: material
+    description: "UN dispute-resolution typically routes to UNCITRAL rules; playbook fallback covers UNCITRAL but the Kenyan counterparty may want NCIA seat."
+    expected_confidence: medium
+  - clause_id: data_protection
+    severity: critical
+    description: "International-org NDAs predate or sidestep DPA 2019; Kenyan counterparty processing personal data needs DPA 2019 obligations even when counterparty is UN-affiliated."
+    required: true
+    expected_confidence: high
+  - clause_id: counterparts_and_execution
+    severity: minor
+    description: "DOCX form; KICA-aware electronic signature language usually absent."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.42"
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "1998/2"

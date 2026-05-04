@@ -1,0 +1,41 @@
+# Cogent / 3M one-way NDA (US, M&A, 2010).
+# 3M acquisition tender-offer NDA. One-way structure — only 3M as the
+# Receiving Party of Cogent's confidential information.
+
+filename: nda-007.pdf
+annotated_at: 2026-05-05
+annotated_by: "parasol-internal-draft"
+notes: |
+  US one-way NDA filed as part of the 3M acquisition of Cogent. Standard
+  US M&A profile; one-way structure doesn't change the playbook flags.
+
+expected_issues:
+  - clause_id: governing_law
+    severity: critical
+    description: "US-governed; outside Kenya playbook hard-limit set."
+    required: true
+    expected_confidence: high
+  - clause_id: dispute_resolution
+    severity: critical
+    description: "US courts default; playbook standard is NCIA arbitration."
+    required: true
+    expected_confidence: high
+  - clause_id: data_protection
+    severity: critical
+    description: "No DPA 2019 obligations or cross-border transfer mechanism."
+    required: true
+    expected_confidence: high
+  - clause_id: return_or_destruction
+    severity: material
+    description: "M&A NDAs commonly allow long return windows; playbook standard is 30 days."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.42"
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "2013/26"
