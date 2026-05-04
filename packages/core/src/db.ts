@@ -90,6 +90,46 @@ export type ReviewInsert = {
 }
 export type ReviewUpdate = Partial<ReviewInsert>
 
+// ─── pipeline_events (migration 0003) ───────────────────────────────────────
+// One row per stage transition (started / completed / failed / retried).
+// Audit-grade observability for the Sprint 5+ admin dashboard.
+
+export type PipelineEventRow = {
+  id: string
+  review_id: string
+  stage: string
+  status: 'started' | 'completed' | 'failed' | 'retried'
+  model_role: string | null
+  model_id: string | null
+  prompt_version: string | null
+  input_tokens: number | null
+  output_tokens: number | null
+  cache_read_tokens: number | null
+  cache_write_tokens: number | null
+  duration_ms: number | null
+  retry_count: number
+  error_message: string | null
+  created_at: string
+}
+export type PipelineEventInsert = {
+  id?: string
+  review_id: string
+  stage: string
+  status: 'started' | 'completed' | 'failed' | 'retried'
+  model_role?: string | null
+  model_id?: string | null
+  prompt_version?: string | null
+  input_tokens?: number | null
+  output_tokens?: number | null
+  cache_read_tokens?: number | null
+  cache_write_tokens?: number | null
+  duration_ms?: number | null
+  retry_count?: number
+  error_message?: string | null
+  created_at?: string
+}
+export type PipelineEventUpdate = Partial<PipelineEventInsert>
+
 // ─── corpus tables (migration 0002) ──────────────────────────────────────────
 
 export type CorpusSourceRow = {
@@ -297,6 +337,12 @@ export type Database = {
         Row: CorpusChunkRow
         Insert: CorpusChunkInsert
         Update: CorpusChunkUpdate
+        Relationships: []
+      }
+      pipeline_events: {
+        Row: PipelineEventRow
+        Insert: PipelineEventInsert
+        Update: PipelineEventUpdate
         Relationships: []
       }
       audit_log: {

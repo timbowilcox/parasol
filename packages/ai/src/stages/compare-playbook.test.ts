@@ -125,17 +125,20 @@ describe('comparePlaybookStage', () => {
     expect(blocks[1]!.cache_control?.type).toBe('ephemeral')
   })
 
-  it('rejects empty clauses array via input schema (no LLM call)', async () => {
-    const create = vi.fn()
+  it('accepts empty clauses array (extract-clauses found nothing) and returns empty deviations', async () => {
+    // Input schema relaxed in Day 9 so the orchestrator can call this
+    // stage even when extract-clauses returned [] (rare but possible).
+    const create = vi.fn().mockResolvedValue(fakeMessage({ deviations: [] }))
     overrideClient({ messages: { create } } as never)
     const { ctx } = buildCtx()
 
-    await expect(comparePlaybookStage.run({
+    const out = await comparePlaybookStage.run({
       contractType: 'nda',
       jurisdiction: 'kenya',
       clauses: [],
-    }, ctx)).rejects.toThrow()
-    expect(create).not.toHaveBeenCalled()
+    }, ctx)
+    expect(out.deviations).toEqual([])
+    expect(create).toHaveBeenCalledTimes(1)
   })
 
   it('schema accepts empty deviations array (model says no deviations)', () => {

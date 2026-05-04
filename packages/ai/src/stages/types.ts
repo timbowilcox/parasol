@@ -230,7 +230,10 @@ export const comparePlaybookInputSchema = z.object({
     'nda', 'dpa', 'msa', 'saas', 'employment', 'lease', 'distribution',
   ]),
   jurisdiction: z.enum(['kenya', 'uganda', 'tanzania', 'rwanda', 'unknown']),
-  clauses: z.array(extractedClauseSchema).min(1),
+  // Accepts empty arrays so the orchestrator can still run on documents
+  // where extract-clauses found no structured clauses; the model returns
+  // an empty deviations[] and the pipeline continues to stages 9 + 10.
+  clauses: z.array(extractedClauseSchema),
 })
 
 export const comparePlaybookOutputSchema = z.object({
@@ -301,3 +304,102 @@ export const generateRedlineOutputSchema = z.object({
 
 export type GenerateRedlineInput = z.infer<typeof generateRedlineInputSchema>
 export type GenerateRedlineOutput = z.infer<typeof generateRedlineOutputSchema>
+
+// ─── Stage 9: defined-terms-check (Haiku, parallel to stages 5-7) ──────────
+// Cross-references defined-term usage. Best-effort; failures non-blocking
+// (per orchestration.md retry/failure table). Surfaces:
+//   - Terms defined but never used (dead definitions)
+//   - Terms used but never defined (orphan references)
+//   - Inconsistent use (defined as one thing, used as another)
+
+export const definedTermIssueSchema = z.object({
+  // The defined term as it appears (e.g. "Confidential Information").
+  term: z.string().min(1),
+  kind: z.enum(['undefined_use', 'unused_definition', 'inconsistent_use']),
+  // Brief reasoning the UI surfaces alongside the flag.
+  description: z.string(),
+  // Where in the document the issue is most visible. Optional; not all
+  // findings have a single canonical location.
+  sectionReference: z.string().optional(),
+})
+
+export type DefinedTermIssue = z.infer<typeof definedTermIssueSchema>
+
+export const definedTermsCheckInputSchema = z.object({
+  fullText: z.string().min(1),
+})
+
+export const definedTermsCheckOutputSchema = z.object({
+  issues: z.array(definedTermIssueSchema),
+})
+
+export type DefinedTermsCheckInput = z.infer<typeof definedTermsCheckInputSchema>
+export type DefinedTermsCheckOutput = z.infer<typeof definedTermsCheckOutputSchema>
+
+// ─── Stage 10: assemble-output (deterministic) ──────────────────────────────
+// Final stage. Deterministic; runs in @parasol/ai/src/assemble-output.ts
+// rather than as a Stage<I,O> because it doesn't call an LLM.
+//
+// Three outputs the customer-facing surfaces consume:
+//   - webView   — structured JSON for the /review/[id] React page
+//   - email     — plain-text + HTML body for the Resend reply
+//   - redline   — base64-encoded .docx
+//
+// Sprint 1 DOCX format: clean Word document containing the issues list +
+// original document body annotated with [REDLINE: ...] markers next to
+// flagged clauses. Native Word tracked-changes (using docx library's
+// InsertedTextRun + DeletedTextRun + features.trackRevisions) is a Day
+// 12-13 polish item — see the Sprint 1 limitation note in HANDOFF.
+
+export interface WebViewIssue {
+  clauseId: string
+  severity: 'critical' | 'material' | 'minor'
+  confidence: 'high' | 'medium' | 'manual_review_recommended'
+  currentPosition: string
+  recommendedPosition: string
+  reasoning: string
+  redlineText: string
+  citations: ReadonlyArray<{
+    source: string
+    id: string
+    section?: string
+    validated: boolean
+  }>
+}
+
+export interface WebViewParty {
+  role: string
+  name: string
+}
+
+export interface WebViewData {
+  reviewId: string
+  contractType: string
+  jurisdiction: string
+  parties: WebViewParty[]
+  // Counts at a glance — surfaced in the page header card.
+  summary: {
+    critical: number
+    material: number
+    minor: number
+    citationValidityRate: number  // 0-1; 1.0 = every citation resolved
+  }
+  issues: WebViewIssue[]
+  definedTerms: DefinedTermIssue[]
+}
+
+export interface EmailBody {
+  // Subject line for the Resend reply. Includes the original subject when
+  // the inbound email had one (handled by route caller, not assemble-output).
+  subjectSuffix: string
+  plainText: string
+  html: string
+}
+
+export interface AssembledOutput {
+  webView: WebViewData
+  email: EmailBody
+  // Base64-encoded .docx. The route handler uploads to Supabase Storage
+  // and inserts a review_documents row pointing at the storage path.
+  redlineDocxBase64: string
+}

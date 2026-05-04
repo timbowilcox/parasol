@@ -1,126 +1,104 @@
-# Handoff: Sprint 1, Day 8 — Heavy reasoning stages + citation validation
+# Handoff: Sprint 1, Day 9 — Final stages + orchestrator complete
 
 Date: 2026-05-04
-Session type: Sprint 1 Day 8
+Session type: Sprint 1 Day 9
 
 ## What was completed
 
-Day 8 scope per `docs/sprint-1-plan.md`: the heavy Sonnet reasoning stages (compare-playbook, generate-redline) plus the deterministic citation validator and confidence calibration. Orchestrator now runs stages 1-8 end to end. Stages 9 (defined-terms-check) and 10 (assemble-output) land Day 9.
+Day 9 scope per `docs/sprint-1-plan.md`: stage 9 (defined-terms-check, Haiku), stage 10 (assemble-output, deterministic). Orchestrator now runs all 10 stages end-to-end. PipelineEventRepository added to `@parasol/core` so route handlers can persist stage transitions to the `pipeline_events` table created in migration 0003.
 
 ### Stage I/O extensions (`packages/ai/src/stages/types.ts`)
 
-New schemas added on top of Day 7's:
-- **`PlaybookDeviation`** — output of compare-playbook. `playbookClauseId` matches a clause in the playbook YAML; `matchedExtractedClauseId` matches one of stage-4's extracted clauses (empty when the clause is missing entirely from the document); `position` ∈ `{standard, fallback, hard_limit, violation}`; `severity`; `confidence`; **verbatim** `currentText` (required for downstream hallucination detection); `reasoning`.
-- **`PipelineIssue`** — output of generate-redline. Includes `clauseId`, severity, confidence, `currentPosition`, `recommendedPosition`, `reasoning`, `redlineText` (verbatim substitution; empty when clause is missing-entirely), and `citations[]` with `source` (10-value enum mirroring playbook), `id`, optional `section`, `validated` flag (false from generate-redline; verify-citations promotes to true after deterministic resolution).
+- **`DefinedTermIssue`** — output of defined-terms-check. `term`, `kind: undefined_use | unused_definition | inconsistent_use`, `description`, optional `sectionReference`.
+- **`WebViewData`** — JSON for the `/review/[id]` React page. `reviewId`, contract metadata, `summary` (severity counts + citationValidityRate), `issues[]`, `definedTerms[]`.
+- **`EmailBody`** — `subjectSuffix`, `plainText`, `html` (escaped + structured). Goes into the Resend reply.
+- **`AssembledOutput`** — `webView`, `email`, `redlineDocxBase64`. The route handler reads each.
 
-### Citation validator (`packages/ai/src/citation-validator.ts`)
+### Defined-terms-check prompt + stage (`packages/ai/src/prompts/defined-terms-check.ts`, `stages/defined-terms-check.ts`)
 
-Pure async function `validateCitations(issues, { resolveCitation })` that:
-1. Skips resolution for non-corpus sources (`market-norm`, `parasol-internal`) — these are intentionally trusted.
-2. For corpus-backed sources, calls the supplied `CitationResolver` to verify the canonical id resolves in `corpus_documents`.
-3. Treats resolver throws as unresolved (conservative-safe).
-4. Falls back to the model-supplied `validated` flag when no resolver is wired (unit-test path; CI gate always supplies one).
-5. Applies confidence calibration on any unresolved corpus citation within an issue:
-   - `high → medium`
-   - `medium → manual_review_recommended`
-   - `manual_review_recommended → unchanged` (already at floor)
-6. Returns the validated issues + diagnostic counts.
+- Haiku 4.5 (cheap pattern-matching, not playbook-aware).
+- Identifies three classes of issue: `undefined_use`, `unused_definition`, `inconsistent_use`. System prompt instructs the model to be conservative on common NDA terms (Disclosing/Receiving Party are conventional).
+- Best-effort: per orchestration.md the orchestrator wraps this in a try/catch that swallows failures (returns `definedTerms: []` instead of erroring). The proofreader can't break the review.
 
-The validator is the deterministic enforcement of CLAUDE.md's hard requirement: *"Anything claiming 'DPA 2019 s.40' must resolve in the corpus or the redline regenerates."* A separate Sonnet content-claim pass (does the citation's text actually support the claim?) is deferred to Day 13 polish if eval shows the deterministic-only check is insufficient.
+### Assemble-output (`packages/ai/src/assemble-output.ts`)
 
-### Compare-playbook prompt + stage
+Deterministic — no LLM call. Produces three customer-facing surfaces:
 
-- Sonnet 4.7 (Sprint 2 A/B-tests Opus per DEF-041).
-- Receives the playbook via the cached system prefix (orchestrator passes `includePlaybookContext: true`). Anthropic's prompt cache holds the playbook for ~5min — every subsequent stage call within the same review pays only for the user-message delta.
-- For each extracted clause: matches it to a playbook clause id, decides where it falls on the standard/fallback/hard_limit/violation spectrum, emits a deviation entry only when there's something to flag.
-- Severity rules baked into the system prompt: `critical` for hard-limit breaches and missing critical clauses; `material` for fallback positions; `minor` for cosmetic gaps.
-- Special case: when the playbook has a clause the document is missing entirely, emits a deviation with `matchedExtractedClauseId: ""` and `position: "violation"`.
+1. **Web view JSON** — `WebViewData` for the React review page. Counts issues by severity, computes `citationValidityRate` over the union of issue citations (non-corpus sources count as trusted; corpus-source citations count only when `validated=true`).
+2. **Email body** — plain-text + HTML. Subject suffix includes severity counts. Body lists each issue with current/recommended/reasoning/citations. Unresolved citations get `[unverified]` markers. HTML escapes user-visible strings to prevent injection (`<script>` in `currentPosition` becomes `&lt;script&gt;`).
+3. **Redline DOCX** — base64-encoded Word document. Format: header (contract type, jurisdiction, parties), summary table (severity counts), per-issue detail (current/recommended/reasoning/citations/proposed-redline), defined-term issues, and the original document body annotated with `[REDLINE — clauseId: recommendation]` markers next to flagged paragraphs.
+   
+   Sprint 1 deliberately does NOT use Word's native tracked-changes feature (InsertedTextRun / DeletedTextRun + `Document.features.trackRevisions`). Native tracked-changes requires preserving the original DOCX's paragraph structure to anchor revision marks correctly — a real engineering task beyond Day 9 scope. **DEF-046** tracks the upgrade for Day 12 polish or post-launch.
 
-### Generate-redline prompt + stage
+### Pipeline-events repository (`packages/core/src/repositories/pipeline-events.ts`)
 
-- Sonnet 4.7. **Per-deviation** (one call per flagged clause). Per orchestration.md, this is the architectural choice — keeps each call's cached prefix focused and lets the orchestrator gracefully degrade when one redline fails.
-- Cached system prefix carries: system prompt + playbook + per-clause authority chunks (the orchestrator updates `ctx.authorityChunks` between calls).
-- Output is a full `PipelineIssue` ready for the audit log + UI: `currentPosition` and `recommendedPosition` summaries, `reasoning` paragraph, exact `redlineText` substitution, and structured citations.
-- Critical instruction in the system prompt: **"Cite or don't claim."** If the model can't cite a Kenyan or EAC authority, it must use a `market-norm` citation explicitly — fabricating a statute reference is a hard failure mode.
-
-### Playbook serialiser (`packages/playbooks/src/serialise.ts`)
-
-`serialisePlaybookForContext(playbook): string` renders a `Playbook` into a markdown string suitable for the cached system prefix:
-- Document header with status banner (draft playbooks get an explicit warning the model sees, so confidence calibration can downgrade clauses where the playbook is the only authority).
-- Per-clause section with all three positions + rationale + citations.
-- Aliases line included only when the clause defines them.
-
-This is the bridge between `@parasol/playbooks` and `@parasol/ai`. The orchestrator deliberately does not depend on `@parasol/playbooks` — the caller (route handler / eval runner) loads the playbook and passes the serialised string via `OrchestratorInput.playbookContext`.
+- `PipelineEventRepository.append(...)` writes one row per stage transition to the `pipeline_events` table (created in migration 0003).
+- `PipelineEventRepository.listForReview(reviewId)` reads chronological history for a review — used by the Sprint 5+ admin observability dashboard and Day-13 latency analysis.
+- The orchestrator emits `PipelineEvent`s via `OrchestratorContext.emitEvent`; the route handler binds these to the repository (`apps/web/src/server/pipeline-events.ts` lands Day 10).
 
 ### Orchestrator extension (`packages/ai/src/orchestrator.ts`)
 
-Stages 5-8 wired:
-- **Stage 5: compare-playbook** — runs once per review, produces a list of `PlaybookDeviation`s.
-- **Stage 6: retrieve-authority** — deterministic, per-deviation. Calls the caller-supplied `AuthorityRetriever` (wraps `@parasol/corpus.retrieveAuthority`). Builds the query as `${clauseId} ${reasoning}` (clipped to 240 chars). `topK: 8` per call to keep prompt sizes manageable.
-- **Stage 7: generate-redline** — Sonnet, per-deviation. The orchestrator updates `ctx.authorityChunks` for each deviation before the call, so each generate-redline invocation sees only the authority for its own clause. Per-deviation try/catch: a single redline failure produces a manual-review placeholder issue and the rest of the pipeline continues (per orchestration.md "The orchestrator collects partial successes").
-- **Stage 8: verify-citations** — runs `validateCitations()` over the full issue list, mutates `validated` flags + confidences, returns the validation outcome alongside the issues.
+Stages 9 + 10 wired:
 
-New `OrchestratorInput` fields:
-- `playbookContext?: string | null` — pre-serialised playbook text. Null skips stages 5-8.
-- `retrieveAuthority?: AuthorityRetriever | null` — null skips retrieval; generate-redline runs without authority context.
-- `resolveCitation?: CitationResolver | null` — null skips deterministic citation verification.
+- **Stage 9: defined-terms-check** — runs sequentially after the redline loop. Per orchestration.md the canonical design has stage 9 in parallel with stages 5-7; Sprint 1 ships sequential because (a) it makes deterministic mock-based tests possible, (b) the latency cost (one extra Haiku call, ~1-3s) is well within the 60s p95 target. Day 13 latency analysis can decide whether to re-introduce `Promise.all`.
+- **Stage 10: assemble-output** — deterministic; runs after verify-citations. Awaits all upstream output. Wrapped in try/catch with explicit `started`/`completed`/`failed` event emission so the route handler sees a real exception if assemble-output fails (a real bug, not a degradable failure).
 
 `OrchestratorRunResult` now includes:
-- `deviations?: PlaybookDeviation[]` — stage-5 output
-- `issues: PipelineIssue[]` — stage-7 + stage-8 output (production type, replaces Day-7's stub)
-- `citations: PipelineCitation[]` — flattened from issues for the eval harness
-- `citationValidation?: ValidationOutcome` — diagnostic counts from stage 8
+- `definedTerms?: DefinedTermIssue[]` — empty array on stage-9 failure
+- `assembled?: AssembledOutput` — present on every successful production run
 
-### Tests added (42 new)
+### Schema relaxation: `comparePlaybookInputSchema.clauses`
+
+Changed from `min(1)` to unconstrained. The orchestrator can now call compare-playbook on documents where extract-clauses returned no structured clauses; the model returns empty deviations and the pipeline continues to stages 9 + 10. This avoids the orchestrator throwing on edge-case inputs like NDA cover-pages with no extractable structure.
+
+## Tests added (29 new)
 
 | Suite | Tests |
 |-------|-------|
-| `packages/ai/src/citation-validator.test.ts` | 17 — `degradeConfidence` (3 cases), `countTrustedCitations` (3), resolver path with mixed sources, non-corpus skip, throw-as-unresolved, no-resolver fallback, confidence calibration (high→medium, medium→manual_review, unchanged when all resolve, unchanged for non-corpus-only), edge cases, vocabulary integrity |
-| `packages/ai/src/stages/compare-playbook.test.ts` | 6 — model-output parsing, completed-event captures cache-read tokens, structured-system block (cached playbook context attached), input schema rejects empty clauses, output schema accepts empty deviations, output schema rejects unknown position |
-| `packages/ai/src/stages/generate-redline.test.ts` | 6 — structured-issue parsing, both playbook + authority blocks attached as cached, authority block omitted when empty, schema rejects missing redlineText, schema accepts empty redlineText, schema rejects invalid citation source enum |
-| `packages/ai/src/orchestrator.test.ts` (extension) | 5 — full stage 1-8 pipeline (DPA s.49 path), stage-4-only when no playbookContext, citation-failure → confidence downgrade, generate-redline failure → manual-review placeholder + pipeline continues, run-without-retrieval-or-resolver |
-| `packages/playbooks/src/serialise.test.ts` | 8 — header content, draft-status warning, production no warning, three-position layout, citations rendered, citations omitted when empty, aliases included, aliases omitted when empty |
+| `packages/ai/src/stages/defined-terms-check.test.ts` | 5 — model-output parsing, empty-input rejection, schema accepts empty issues, schema rejects unknown kind, schema requires non-empty term |
+| `packages/ai/src/assemble-output.test.ts` | 11 — web view (reviewId/contract type/parties/summary, citationValidityRate semantics including non-corpus trusted, severity-count aggregation, definedTerms inclusion), email body (subject suffix, plain text content, unverified markers, citation-validity-note conditional, HTML escaping + structure), DOCX (valid base64 zip, empty-issue path) |
+| `packages/core/src/repositories/pipeline-events.test.ts` | 9 — append (full/defaults/nulls/error), listForReview (order, empty, error). Tests the repository in isolation with mocked Supabase clients |
+| `packages/ai/src/orchestrator.test.ts` (extension) | 4 — full 1-10 pipeline with assembled output, assemble-output PipelineEvent emission, defined-terms-check failure swallowed (graceful), schema-relaxation regression coverage |
 
-Cumulative repo test count: **332 passing across 6 packages** (+42 today).
+Cumulative repo test count: **361 passing across 6 packages** (+29 today).
 
 ## Verification evidence
 
 ```
 pnpm turbo typecheck test lint
-→ 18/18 successful, 332 tests passing
+→ 18/18 successful, 361 tests passing
 → Zero TS errors, zero lint warnings
 ```
 
 ## Database state
 
-Unchanged. No migrations today.
+Unchanged. `pipeline_events` table was created back in migration 0003 (Day 1); Day 9 only adds the repository wrapper.
 
 ## What is NOT done
 
-- **Stage 9: defined-terms-check** — Day 9.
-- **Stage 10: assemble-output** (DOCX tracked-change generation, email body, web view JSON) — Day 9.
-- **Document intake plumbing** (PDF byte-extraction, DOCX-to-text, page rasterisation for vision) — Day 9-10.
-- **Production end-to-end run on a real NDA** — Day 13 reflows.
-- **Eval gate flipped to `--pipeline=production`** — possible after Day 9 ships assemble-output.
-- **Sonnet content-claim citation validator** — the deterministic resolution check is the hard requirement and is in place. Day 13 polish if eval reveals false negatives.
+- **Live end-to-end smoke test on a real NDA** — needs the route handler to call the orchestrator end-to-end. That's Day 10 (email intake completion) + Day 11 (web upload UI). Day 13 reflows.
+- **Native Word tracked-changes for the redline DOCX** — DEF-046. The current DOCX has visible `[REDLINE — ...]` markers but doesn't use Word's native Insertion/Deletion + Accept/Reject flow.
+- **Pipeline-events route-handler wire-up** — `apps/web/src/server/pipeline-events.ts` (the helper that returns an `emitEvent` function bound to the repository) lands Day 10.
+- **`pnpm pipeline:smoke` CLI** — useful for manual end-to-end testing without spinning up the full Next.js dev server. Not on the Sprint 1 critical path; defer to Day 13 polish if needed.
+- **`p95 latency measured on 3 test NDAs`** — needs live API calls + intake plumbing. Day 10/11 will produce these measurements.
 
 ## Known issues / technical notes
 
-- **Workspace dependency boundary preserved**: `@parasol/ai` still does not depend on `@parasol/corpus` or `@parasol/playbooks`. The retrieve-authority and resolveCitation functions are dependency-injected by the caller; the playbook arrives pre-serialised as a string. This keeps the workspace cycle closed.
-- **Generate-redline cost**: per orchestration.md, ~$0.15 per NDA on Sonnet baseline. Sprint 1 within the $0.20-per-review budget.
-- **Cache hit rate**: every generate-redline call within a review reuses the same cached playbook prefix. Authority chunks are clause-specific, so they cache-miss per clause but hit on retry. Day 13 eval will surface aggregate cache savings.
+- **Sequential vs parallel stages 5+9**: orchestration.md describes stage 9 (defined-terms-check) running in parallel with stages 5-7. Sprint 1 ships sequential — the latency cost is small (~1-3s extra Haiku call) and the simplification makes deterministic testing possible. Day 13 latency analysis can promote to `Promise.all` if needed.
+- **Severity color hex format**: The `docx` library rejects `#` prefixes and 3-character short forms. `severityColor()` in assemble-output.ts returns 6-character lowercase hex without `#`; HTML callers prepend `#` at the call site.
+- **DOCX redline annotations are heuristic**: the inline `[REDLINE — ...]` markers use a 32-character substring match against extracted paragraph text to identify which paragraphs to annotate. This works on clean digital PDFs and DOCX inputs but may miss matches on heavily reflowed inputs. Native tracked-changes (DEF-046) sidesteps this entirely.
 
-## Exact next step (Day 9) — Final stages + end-to-end smoke test
+## Exact next step (Day 10) — Email intake completion
 
-Day 9 plan from `docs/sprint-1-plan.md`:
-1. **`packages/ai/src/prompts/defined-terms-check.ts` + stage** — Haiku. Cross-references defined terms across the document. Best-effort; failures non-blocking.
-2. **`packages/ai/src/stages/assemble-output.ts`** — deterministic. Generates `.docx` tracked changes via docxtemplater, plain-text email body, web view JSON.
-3. **Orchestrator fully wired** — stages 9 + 10 in.
-4. **End-to-end integration test** — submit one real NDA → receives `issues[]` + `review_documents` (redlined .docx).
-5. **p95 latency measured on 3 test NDAs; confirm < 60s.**
-6. **All `pipeline_events` written to DB; audit_log entry on review completion.**
+Day 10 plan from `docs/sprint-1-plan.md`:
+1. **Email route handler wired fully to orchestrator pipeline** — `apps/web/src/app/api/inbound/email/route.ts` calls `runOrchestrator` and processes the result.
+2. **Reply assembly: Resend outbound with redlined .docx attachment + structured summary body** — uses `assembled.email.subjectSuffix`, `assembled.email.html`, attaches the base64 DOCX.
+3. **Sender domain allowlist enforcement** — already in place; this day verifies it.
+4. **Webhook signature verification integration test** (Svix replay-attack prevention) — already in place; this day exercises against a Resend test fixture.
+5. **`pnpm test` passes including email integration tests** against Resend test fixture.
+6. **End-to-end: forward a real NDA to `test@ask.parasol.co.ke`; receive reply within 90s**.
 
-Day 9 has no Tim action items.
+Day 10 has no Tim action items beyond the Resend MX which Tim already verified Day 5.
 
 ## Tim action items still open
 

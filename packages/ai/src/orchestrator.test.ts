@@ -228,6 +228,8 @@ describe('runOrchestrator — full pipeline (stages 1-8)', () => {
           ],
         },
       },
+      // Stage 9: defined-terms-check (clean document)
+      { issues: [] },
     ])
     overrideClient(client as never)
 
@@ -253,8 +255,8 @@ describe('runOrchestrator — full pipeline (stages 1-8)', () => {
     expect(result.citationValidation?.totalCitations).toBe(1)
     expect(result.citationValidation?.resolvedCitations).toBe(1)
     expect(result.citationValidation?.issuesWithFailures).toBe(0)
-    // 4 Haiku stages + 1 compare-playbook + 1 generate-redline = 6 LLM calls
-    expect(create).toHaveBeenCalledTimes(6)
+    // 4 Haiku stages + 1 compare-playbook + 1 generate-redline + 1 defined-terms = 7 LLM calls
+    expect(create).toHaveBeenCalledTimes(7)
     expect(retrieveAuthority).toHaveBeenCalledTimes(1)
     expect(retrieveAuthority).toHaveBeenCalledWith(expect.objectContaining({
       clauseId: 'governing_law',
@@ -315,6 +317,8 @@ describe('runOrchestrator — full pipeline (stages 1-8)', () => {
           ],
         },
       },
+      // Stage 9: defined-terms-check (clean)
+      { issues: [] },
     ])
     overrideClient(client as never)
 
@@ -411,5 +415,110 @@ describe('runOrchestrator — full pipeline (stages 1-8)', () => {
     expect(result.deviations).toEqual([])
     expect(result.issues).toEqual([])
     expect(result.citationValidation?.totalCitations).toBe(0)
+  })
+
+  // ─── Day 9 additions: stages 9 + 10 ─────────────────────────────────────
+
+  it('produces assembled output (web view + email + DOCX) for the full 1-10 pipeline', async () => {
+    const { client } = sequencedClient([
+      { pages: [{ pageNumber: 0, qualityScore: 0.95, isClean: true, issues: [] }], recommendedRoute: 'clean' },
+      { pages: [{ pageNumber: 0, text: 'doc' }], fullText: 'doc' },
+      { contractType: 'nda', jurisdiction: 'kenya', parties: [{ role: 'Disclosing', name: 'Acme' }], confidence: 'high', reasoning: 'NDA.' },
+      { clauses: [{ clauseId: 'governing_law', displayName: 'GL', rawText: 'Kenya.', clauseOrder: 0 }] },
+      // Sequential order: stage 5 (compare) → stage 7 (redline loop) → stage 9 (defined-terms)
+      { deviations: [{ playbookClauseId: 'governing_law', matchedExtractedClauseId: 'governing_law', position: 'standard', severity: 'minor', confidence: 'high', currentText: 'Kenya.', reasoning: 'r' }] },
+      // Stage 7
+      { issue: { clauseId: 'governing_law', severity: 'minor', confidence: 'high', currentPosition: 'Kenya.', recommendedPosition: 'OK.', reasoning: 'r', redlineText: 'Kenya.', citations: [] } },
+      // Stage 9
+      { issues: [] },
+    ])
+    overrideClient(client as never)
+
+    const result = await runOrchestrator({
+      reviewId: 'r-assembled',
+      workspaceId: 'ws-1',
+      pages: [{ pageNumber: 0, text: 't' }],
+      acceptedContractTypes: SPRINT_1_ACCEPTED_CONTRACT_TYPES,
+      playbookContext: '# Playbook',
+      retrieveAuthority: async () => [],
+      resolveCitation: async () => true,
+      modelEnv: { haiku: 'm', sonnet: 'm' },
+    })
+
+    expect(result.assembled).toBeDefined()
+    expect(result.assembled?.webView.reviewId).toBe('r-assembled')
+    expect(result.assembled?.email.plainText).toContain('governing_law')
+    // DOCX is a zip; first two bytes are PK
+    const bytes = Buffer.from(result.assembled!.redlineDocxBase64, 'base64')
+    expect(bytes[0]).toBe(0x50)
+    expect(bytes[1]).toBe(0x4B)
+    expect(result.definedTerms).toEqual([])
+  })
+
+  it('emits an assemble-output PipelineEvent', async () => {
+    const { client } = sequencedClient([
+      { pages: [{ pageNumber: 0, qualityScore: 0.95, isClean: true, issues: [] }], recommendedRoute: 'clean' },
+      { pages: [{ pageNumber: 0, text: 't' }], fullText: 't' },
+      { contractType: 'nda', jurisdiction: 'kenya', parties: [], confidence: 'high', reasoning: 'NDA.' },
+      { clauses: [] },
+      { deviations: [] },
+      { issues: [] },
+    ])
+    overrideClient(client as never)
+
+    const captured: string[] = []
+    await runOrchestrator({
+      reviewId: 'r-events',
+      workspaceId: 'ws-1',
+      pages: [{ pageNumber: 0, text: 't' }],
+      acceptedContractTypes: SPRINT_1_ACCEPTED_CONTRACT_TYPES,
+      playbookContext: '# Playbook',
+      modelEnv: { haiku: 'm', sonnet: 'm' },
+      emitEvent: (e) => captured.push(`${e.stage}:${e.status}`),
+    })
+    expect(captured).toContain('assemble-output:started')
+    expect(captured).toContain('assemble-output:completed')
+  })
+
+  it('survives defined-terms-check failures (best-effort, non-blocking)', async () => {
+    const queue: unknown[] = [
+      { pages: [{ pageNumber: 0, qualityScore: 0.95, isClean: true, issues: [] }], recommendedRoute: 'clean' },
+      { pages: [{ pageNumber: 0, text: 't' }], fullText: 't' },
+      { contractType: 'nda', jurisdiction: 'kenya', parties: [], confidence: 'high', reasoning: 'NDA.' },
+      { clauses: [] },
+      // Sequential: stage 5 (compare, returns no deviations) → stage 9
+      // (defined-terms — returns garbage 3x, exhausts retries; orchestrator
+      // catches and continues with empty definedTerms). Pipeline still
+      // completes through stages 8 + 10.
+      // dt-fail, dt-fail.
+      { deviations: [] },
+      'not json',
+      'not json',
+      'not json',
+    ]
+    const create = vi.fn(async () => {
+      const next = queue.shift()
+      const text = typeof next === 'string' ? next : JSON.stringify(next)
+      return {
+        id: 'msg', type: 'message', role: 'assistant',
+        content: [{ type: 'text', text }],
+        model: 'm', stop_reason: 'end_turn', stop_sequence: null,
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }
+    })
+    overrideClient({ messages: { create } } as never)
+
+    const result = await runOrchestrator({
+      reviewId: 'r-defined-terms-fail',
+      workspaceId: 'ws-1',
+      pages: [{ pageNumber: 0, text: 't' }],
+      acceptedContractTypes: SPRINT_1_ACCEPTED_CONTRACT_TYPES,
+      playbookContext: '# Playbook',
+      modelEnv: { haiku: 'm', sonnet: 'm' },
+    })
+    // definedTerms should be [] (graceful failure)
+    expect(result.definedTerms).toEqual([])
+    // Pipeline still completes — assembled output exists
+    expect(result.assembled).toBeDefined()
   })
 })

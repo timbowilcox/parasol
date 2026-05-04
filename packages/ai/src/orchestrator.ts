@@ -32,6 +32,7 @@ import {
   extractClausesStage,
   comparePlaybookStage,
   generateRedlineStage,
+  definedTermsCheckStage,
   type PageInput,
   type QualityAssessOutput,
   type ExtractTextCleanOutput,
@@ -40,12 +41,15 @@ import {
   type PipelineIssue,
   type PipelineCitation,
   type PlaybookDeviation,
+  type DefinedTermIssue,
+  type AssembledOutput,
 } from './stages/index.js'
 import {
   validateCitations,
   type CitationResolver,
   type ValidationOutcome,
 } from './citation-validator.js'
+import { assembleOutput } from './assemble-output.js'
 
 // ─── Dependency-injected helpers (provided by the caller) ───────────────────
 //
@@ -109,10 +113,15 @@ export interface OrchestratorRunResult {
   deviations?: PlaybookDeviation[]
   issues: PipelineIssue[]
   citations: PipelineCitation[]
-  // Validation outcome for the run as a whole. Present when verify-citations ran.
   citationValidation?: ValidationOutcome
-  // Day 9 assemble-output writes this (.docx tracked changes, base64).
-  redlineDocxBase64?: string
+  // Stage 9 (defined-terms-check) — present when the production path ran.
+  // Empty array when the stage failed (best-effort; not pipeline-blocking).
+  definedTerms?: DefinedTermIssue[]
+  // Stage 10 (assemble-output) — present when the production path ran. The
+  // route handler reads `assembled.redlineDocxBase64` to upload to Storage,
+  // `assembled.email` for the Resend reply, `assembled.webView` for the
+  // /review/[id] React page hydration.
+  assembled?: AssembledOutput
 }
 
 // ─── runOrchestrator ────────────────────────────────────────────────────────
@@ -184,6 +193,12 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
   }
 
   // ── Stage 5: compare-playbook
+  // Note: orchestration.md describes stage 9 (defined-terms-check) as running
+  // in parallel to stages 5-7. Sprint 1 runs them sequentially for two
+  // reasons: (a) it makes deterministic mock-based tests possible, (b) the
+  // latency cost (one extra Haiku call, ~1-3s) is well within the 60s p95
+  // target. Day 13 can re-introduce Promise.all if latency analysis shows
+  // we're trending close to the bar.
   const compareOut = await comparePlaybookStage.run({
     contractType: triage.contractType as ContractType,
     jurisdiction: triage.jurisdiction,
@@ -216,6 +231,15 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
     }
   }
 
+  // ── Stage 9: defined-terms-check (Haiku, best-effort, non-blocking).
+  // Per orchestration.md: failures are swallowed; an empty result is
+  // surfaced and the pipeline continues. Sequential after generate-redline
+  // for Sprint 1 (see comment above stage 5).
+  const definedTerms: DefinedTermIssue[] = await definedTermsCheckStage
+    .run({ fullText: extractedText.fullText }, ctx)
+    .then((r) => r.issues)
+    .catch(() => [])
+
   // ── Stage 8: verify-citations (deterministic; mutates confidence)
   const citationValidation = await validateCitations(issues, {
     resolveCitation: input.resolveCitation ?? undefined,
@@ -224,6 +248,42 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
   // Flatten verified citations to the run-level citations array. The eval
   // harness uses this for its independent citation-validity metric.
   const allCitations = citationValidation.issues.flatMap((i) => i.citations)
+
+  // ── Stage 10: assemble-output (deterministic). Awaits all upstream.
+  const assembleStartedAt = Date.now()
+  ctx.emitEvent({
+    stage: 'assemble-output',
+    status: 'started',
+    promptVersion: '0.1.0',
+  })
+  let assembled: AssembledOutput | undefined
+  try {
+    assembled = await assembleOutput({
+      reviewId: input.reviewId,
+      triage,
+      clauses: clauseOut.clauses,
+      issues: citationValidation.issues,
+      definedTerms,
+      fullText: extractedText.fullText,
+    })
+    ctx.emitEvent({
+      stage: 'assemble-output',
+      status: 'completed',
+      promptVersion: '0.1.0',
+      durationMs: Date.now() - assembleStartedAt,
+    })
+  } catch (cause) {
+    // Assemble-output is deterministic; if it fails, it's a real bug.
+    // Emit a failed event so the route handler can surface it.
+    ctx.emitEvent({
+      stage: 'assemble-output',
+      status: 'failed',
+      promptVersion: '0.1.0',
+      durationMs: Date.now() - assembleStartedAt,
+      errorMessage: (cause as Error).message,
+    })
+    throw cause
+  }
 
   return {
     reviewId: input.reviewId,
@@ -235,6 +295,8 @@ export async function runOrchestrator(input: OrchestratorInput): Promise<Orchest
     issues: citationValidation.issues,
     citations: allCitations,
     citationValidation,
+    definedTerms,
+    assembled,
   }
 }
 

@@ -163,6 +163,14 @@ Path A architecture means Parasol is a US-incorporated SaaS selling cross-border
 - **Why it matters when picked up**: Without this, an outbound response that bounces or gets marked as spam disappears from operator visibility. The customer assumes Parasol ignored them. Long-term reputation risk on Resend's sending IPs if complaint rate goes uncaught.
 - **Whose action**: Claude Code (handler + table + activity feed wiring); Tim (configure the second webhook in Resend → Webhooks once handler ships)
 
+#### DEF-046: Native Word tracked-changes for the redline DOCX
+- **Trigger**: `sprint:1 day 12` OR `phase:v1-launch-hardening`
+- **What**: The Sprint 1 day-9 `assemble-output` produces a clean Word document with the issues summary + the original document body annotated with `[REDLINE — clauseId: ...]` markers next to flagged clauses. This is functional but doesn't use Word's native tracked-changes feature (Insertions / Deletions that the user can Accept/Reject in Word's Review tab). Upgrade to use the `docx` library's `InsertedTextRun` + `DeletedTextRun` + `Document.features.trackRevisions` so each redline appears as a strikethrough-original + colored-insert pair the user accepts in Word's native flow.
+- **Why deferred**: Native tracked-changes generation requires careful preservation of the original document's paragraph and run structure — the current code reconstructs paragraphs from extracted plaintext, which loses the formatting that Word needs to anchor revision marks correctly. A robust implementation reads the original DOCX bytes, walks the OOXML, and inserts revision marks at the right offsets. That's a real engineering task — Day 12 polish slot or post-launch.
+- **Why it matters**: Native tracked-changes is the canonical Word review experience. Without it, customers see "Parasol's review is helpful but I have to manually copy-paste the recommendations into my version of the document" — friction that erodes the email-front-door promise.
+- **Workaround in Sprint 1**: The `[REDLINE — ...]` markers are clearly visible inline; the issue list at the top of the DOCX is the operative view. Customers can act on the recommendations, just not via Word's native review UI.
+- **Whose action**: Claude Code
+
 ### Product hardening
 
 #### DEF-026: Eval acceptance bar tightening at v1 launch
