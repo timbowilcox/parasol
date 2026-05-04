@@ -1,19 +1,17 @@
 // POST /api/inbound/email — Resend email.received webhook handler.
 //
-// Sprint 1 scope: verify Svix signature, look up the workspace by recipient
-// subdomain, check the sender's domain against the workspace's allowlist,
-// create a `reviews` row in 'pending' status, return 200. The actual
-// pipeline run (fetch attachment bytes via Resend API → orchestrator) is
-// queued for Day 9 once the orchestrator is wired end to end.
-//
-// Critical: handler returns 200 within ~1s. Anything heavier than DB writes
-// goes onto a queue (Sprint 2 wires Inngest or Supabase Edge cron — DEF-018).
+// Sprint 1 scope: verify Svix signature, route by recipient subdomain, check
+// sender allowlist, create a 'pending' reviews row, then hand the heavy work
+// off to processReview() via Vercel's waitUntil. The webhook handler itself
+// returns 200 within ~1s; the orchestrator + reply send happen after the
+// response is flushed but within the function's max-duration window.
 //
 // Per-workspace addressing: Sprint 1 uses a single fixed recipient
 // `<anything>@ask.parasol.co.ke`; Sprint 3 expands to
 // `ask@<workspace-slug>.parasol.co.ke` per DEF-002.
 
 import { NextResponse, type NextRequest } from 'next/server'
+import { after } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@parasol/core'
 import {
@@ -23,6 +21,12 @@ import {
   classifyRecipients,
   type InboundEmailData,
 } from '@/lib/inbound/email-webhook'
+import { processReview } from '@/server/process-review'
+
+// Vercel-allocated max duration. The whole pipeline must complete within this
+// window or the function gets killed mid-run. 60s is the Sprint 1 p95 target;
+// 120s is the upper bound while we measure (Day 13 narrows it back to 60).
+export const maxDuration = 120
 
 // Sprint 1 fixed recipient. Once DEF-002 lands, parse the workspace slug out
 // of the local-part of the recipient (`ask@<slug>.parasol.co.ke`) and look
@@ -180,9 +184,34 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     )
   }
 
-  // TODO Day 9 (DEF-018 enqueue): kick off the orchestrator pipeline for
-  // review.id. For Sprint 1 the row sits in 'pending' until the pipeline
-  // runs; Day 10's email-intake completion ticket finishes the loop.
+  // Hand off the orchestrator + reply send to run after the response flushes.
+  // Vercel's `after()` keeps the function alive past the response boundary
+  // (up to maxDuration). When self-hosting we'd want a real queue (DEF-018);
+  // Sprint 1 ships on Vercel so this is sufficient.
+  const firstAttachment = data.attachments[0] ?? null
+  after(async () => {
+    try {
+      await processReview({
+        supabase,
+        reviewId: review.id,
+        workspaceId: workspace.id,
+        replyTo: senderAddress,
+        emailMessageId: data.message_id,
+        inboundEmailId: data.email_id,
+        attachmentId: firstAttachment?.id ?? null,
+        attachmentFilename: firstAttachment?.filename ?? null,
+        originalSubject: data.subject,
+      })
+    } catch (cause) {
+      // processReview is supposed to swallow its own errors and return a
+      // result; this catch is the last-resort guard for an unexpected throw
+      // (e.g. a programming error in the helper itself).
+      console.error('inbound.process_review_unhandled', {
+        review_id: review.id,
+        error: (cause as Error).message,
+      })
+    }
+  })
 
   return NextResponse.json({ accepted: true, review_id: review.id }, { status: 200 })
 }
