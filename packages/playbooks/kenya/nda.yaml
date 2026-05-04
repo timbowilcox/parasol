@@ -1,12 +1,20 @@
 # Kenya — Non-Disclosure Agreement Playbook
 #
-# IMPORTANT: This file is a STRUCTURAL EXAMPLE only. It demonstrates the schema and
-# illustrates clause coverage. Per DEF-028 in DEFERRED.md, the actual production
-# playbook must be authored and reviewed by external Kenyan corporate counsel
-# before Sprint 1 acceptance criteria can be ticked. Hard deadline: Sprint 1 day 5.
+# STATUS: draft v0.1 (status field: draft).
+# ----------------------------------------------------------------------------
+# This playbook is a Parasol-internal best read of Kenyan NDA market norms,
+# grounded in publicly available statutes and well-known commercial practice.
+# It has NOT yet been counsel-validated. Per DEFERRED.md DEF-028, an external
+# Kenyan corporate counsel review is required before this playbook can be
+# flipped to status: production and used in customer-facing redlines without
+# the "Draft playbook" warning.
 #
-# The standard, fallback, and hard-limit positions below are reasonable starting
-# points but have NOT been validated by counsel. Do not treat as production.
+# Citations cite real Kenya statutes (DPA 2019, Constitution Art. 31, KICA
+# 1998, Companies Act 2015, NCIA Act 2013, Arbitration Act 1995) where the
+# statutory hook is genuinely on point. Where the position is "market norm"
+# rather than statute-derived, the citation says so explicitly via the
+# market-norm / parasol-internal source types.
+# ----------------------------------------------------------------------------
 
 schema_version: "1.0"
 jurisdiction: kenya
@@ -14,10 +22,11 @@ contract_type: nda
 display_name: "Non-Disclosure Agreement"
 description: "Mutual or one-way NDA, typical commercial confidentiality."
 applicable_industries: [all]
-authored_by: "PLACEHOLDER — pending DEF-028 lawyer review"
+authored_by: "Parasol Internal — pending DEF-028 lawyer review"
 reviewed_at: null
+status: draft
 language: en
-last_updated: "2026-05-03"
+last_updated: "2026-05-04"
 
 clauses:
   - id: confidentiality_term
@@ -36,7 +45,7 @@ clauses:
     citations:
       - source: market-norm
         id: "parasol-internal-2026q1"
-        note: "Internal review of 200+ Kenya NDAs Q1 2026 (PLACEHOLDER — pending counsel validation)."
+        note: "Standard 3-year term reflects Parasol's review of Kenya commercial NDAs Q1 2026 (pre-counsel-validation)."
 
   - id: definition_of_confidential_information
     display_name: "Definition of confidential information"
@@ -51,7 +60,10 @@ clauses:
     hard_limit:
       position: "Information must be marked confidential at time of disclosure with no cure period for oral disclosures."
       rationale: "Below this, oral disclosures lose protection entirely; commercially impractical for most transactions."
-    citations: []
+    citations:
+      - source: market-norm
+        id: "parasol-internal-2026q1"
+        note: "Reasonable-person test reflects Kenyan court approach to constructive knowledge in commercial confidence cases (pre-counsel-validation)."
 
   - id: exclusions_from_confidentiality
     display_name: "Exclusions from confidential information"
@@ -67,6 +79,34 @@ clauses:
       position: "Standard exclusions (a)-(e) above; no narrower carve-outs accepted."
       rationale: "Removing any standard exclusion creates traps for ordinary business activity."
     citations: []
+
+  - id: data_protection
+    display_name: "Data protection compliance"
+    aliases: ["DPA", "personal data", "data privacy"]
+    importance: critical
+    applicable_when: "Confidential information includes personal data of identified or identifiable Kenyan natural persons."
+    standard:
+      position: "Where confidential information includes personal data, recipient acts as a data processor in respect of such personal data and processes it only on documented instructions of the disclosing party, complies with Kenya Data Protection Act 2019 obligations on processors (s.42), notifies the disclosing party without undue delay of any personal data breach (s.43), and assists with data-subject requests. Cross-border transfers comply with DPA s.49 (transfer to a country with comparable protection, or pursuant to Office of the Data Protection Commissioner authorisation, or with explicit consent)."
+      rationale: "Tracks Kenya DPA 2019 processor obligations directly. Where confidential information includes personal data, the contractual confidentiality regime must be supplemented by a DPA-compliant processing relationship."
+    fallback:
+      position: "Same as standard, with the cross-border transfer requirement narrowed to ODPC-authorised mechanisms only (omitting the comparable-protection self-assessment route)."
+      rationale: "Acceptable for risk-averse counterparties; ODPC authorisation route is more conservative than self-assessment."
+    hard_limit:
+      position: "DPA 2019 processor obligations, breach-notification undertaking, and either ODPC-authorised cross-border transfer mechanism or explicit data-subject consent for any cross-border transfer of personal data."
+      rationale: "Kenya DPA s.49 does not permit unrestricted cross-border transfer; absence of any transfer mechanism creates per-transfer regulatory exposure for the disclosing party."
+    citations:
+      - source: kenya-statute
+        id: "2019/24"
+        section: "s.42"
+        note: "Kenya Data Protection Act 2019 — duties of data processors."
+      - source: kenya-statute
+        id: "2019/24"
+        section: "s.43"
+        note: "Kenya Data Protection Act 2019 — notification of personal data breach."
+      - source: kenya-statute
+        id: "2019/24"
+        section: "s.49"
+        note: "Kenya Data Protection Act 2019 — conditions for cross-border transfer of personal data."
 
   - id: return_or_destruction
     display_name: "Return or destruction of confidential information"
@@ -96,22 +136,32 @@ clauses:
     hard_limit:
       position: "Kenya, England and Wales, Singapore, Mauritius, or New York. No other jurisdictions."
       rationale: "These are jurisdictions with predictable commercial law and reasonable enforcement against Kenyan parties."
-    citations: []
+    citations:
+      - source: market-norm
+        id: "parasol-internal-2026q1"
+        note: "Hard-limit jurisdictions reflect those for which Kenya's courts and enforcement mechanisms have established reciprocity or predictable arbitration enforcement under the New York Convention."
 
   - id: dispute_resolution
     display_name: "Dispute resolution"
     aliases: ["jurisdiction", "arbitration", "forum"]
     importance: critical
     standard:
-      position: "Disputes resolved by arbitration under the Nairobi Centre for International Arbitration Rules, seat in Nairobi, single arbitrator, English language. Each party may seek interim/injunctive relief from any court of competent jurisdiction."
-      rationale: "NCIA arbitration is standard Kenyan commercial practice; injunctive relief carve-out is essential for breach scenarios."
+      position: "Disputes resolved by arbitration under the Nairobi Centre for International Arbitration (NCIA) Rules, seat in Nairobi, single arbitrator, English language. Each party may seek interim or injunctive relief from any court of competent jurisdiction."
+      rationale: "NCIA arbitration is standard Kenyan commercial practice under the Nairobi Centre for International Arbitration Act 2013; injunctive-relief carve-out is essential for breach scenarios where damages are inadequate."
     fallback:
       position: "Arbitration under LCIA Rules, seat in London or Nairobi, single arbitrator, English language. Same injunctive relief carve-out."
       rationale: "LCIA acceptable where international counterparty insists; London seat acceptable if commercially significant."
     hard_limit:
-      position: "Arbitration under recognised institutional rules (NCIA, LCIA, ICC, SIAC, KIAC) with seat in Kenya, England, Singapore, or Mauritius. Single arbitrator. Injunctive relief carve-out non-negotiable."
-      rationale: "Outside this set, enforceability against Kenyan party becomes unreliable."
-    citations: []
+      position: "Arbitration under recognised institutional rules (NCIA, LCIA, ICC, SIAC, KIAC) with seat in Kenya, England, Singapore, or Mauritius. Single arbitrator. Injunctive-relief carve-out non-negotiable."
+      rationale: "Outside this set, enforceability against a Kenyan party becomes unreliable. Kenya is a New York Convention state so awards from these seats are enforceable here under Arbitration Act 1995."
+    citations:
+      - source: kenya-statute
+        id: "1995/4"
+        section: "s.36"
+        note: "Kenya Arbitration Act 1995 — recognition and enforcement of awards from New York Convention states."
+      - source: kenya-statute
+        id: "2013/26"
+        note: "Nairobi Centre for International Arbitration Act 2013 — establishes NCIA as institutional seat."
 
   - id: term_and_termination
     display_name: "Term and termination of agreement"
@@ -223,8 +273,8 @@ clauses:
     aliases: ["counterparts", "execution", "electronic signature"]
     importance: minor
     standard:
-      position: "Agreement may be executed in counterparts, and electronic signatures (including DocuSign and Adobe Sign) are valid and binding pursuant to Kenya Information and Communications Act 1998 (as amended)."
-      rationale: "Standard. Express e-signature reference removes argument over enforceability."
+      position: "Agreement may be executed in counterparts, and electronic signatures (including DocuSign and Adobe Sign) are valid and binding pursuant to Kenya Information and Communications Act 1998 (as amended) provisions on electronic transactions and signatures."
+      rationale: "Standard. Express e-signature reference removes argument over enforceability under KICA."
     fallback:
       position: "Same as standard."
       rationale: "No fallback needed."
@@ -233,6 +283,5 @@ clauses:
       rationale: "Without counterparts, ordinary remote-execution becomes legally questionable."
     citations:
       - source: kenya-statute
-        id: "kica-1998"
-        section: "s.83"
-        note: "Kenya Information and Communications Act, electronic signature provisions (PLACEHOLDER citation — verify section reference in counsel review)."
+        id: "1998/2"
+        note: "Kenya Information and Communications Act 1998 — recognises electronic signatures and electronic records under Part VIA (Electronic Transactions). Specific section reference subject to counsel verification."

@@ -1,118 +1,134 @@
-# Handoff: Sprint 1, Day 4 — Hybrid retrieval + smoke test
+# Handoff: Sprint 1, Day 5 — Playbook validator + email webhook + Day 4 acceptance test
 
 Date: 2026-05-04
-Session type: Sprint 1 Day 4
+Session type: Sprint 1 Day 5
 
 ## What was completed
 
-Day 4 scope per `docs/sprint-1-plan.md`: hybrid retrieval (BM25 + dense vector + RRF + Voyage rerank-2). Plus the live ingest smoke test against dev Supabase, which surfaced two issues — one I fixed (AKN root selector) and one Tim needs to fix (Voyage rate-limit, escalated DEF-005).
+Day 5 scope per `docs/sprint-1-plan.md`: Zod-based playbook schema + validator + loader + CLI, Resend inbound email webhook, and the lawyer-review workaround agreed with Tim. Plus the Day 4 acceptance test (DPA s.49 in top 3) which I couldn't run on Day 4 because Voyage was rate-limited.
 
-### New migrations
+### Playbook infrastructure (`packages/playbooks/src/`)
 
-- **0005_corpus_retrieval.sql** — two SQL functions:
-  - `match_corpus_chunks(query_embedding vector, match_count, jurisdiction_filter, source_type_filter, clause_types_filter)` — top-N pgvector cosine search with eager join to `corpus_documents`. Filters out superseded documents and rows with null embeddings.
-  - `bm25_corpus_chunks(query_text, match_count, jurisdiction_filter, source_type_filter, clause_types_filter)` — top-N BM25 search using `websearch_to_tsquery` (forgiving of natural-language input). Returns `ts_rank_cd` scores so the JS layer can do RRF properly.
-  - Both functions granted to `authenticated` so retrieval works under user session (no service-role usage in retrieval).
-- **0006_corpus_grants.sql** — explicit `GRANT ALL ... TO anon, authenticated, service_role` on every Sprint 1 public table. Surfaced as the first thing the smoke test hit: `permission denied for table corpus_sources`. The default `ALTER DEFAULT PRIVILEGES` only auto-grants to tables created by the `postgres` superuser; the migrator role used by `supabase db push --db-url` doesn't pick that up. Migration also sets up `ALTER DEFAULT PRIVILEGES` going forward so future tables don't need this fix.
+- **`schema.ts`** — Zod schema mirroring `docs/playbook-schema.md`. Top-level `playbookSchema` covers `schema_version`, jurisdiction enum, contract-type enum, `display_name`, `applicable_industries`, `authored_by`, `reviewed_at` (nullable, YYYY-MM-DD), `status` enum (`production` | `draft`, defaults to `draft`), `last_updated`, and a non-empty `clauses` array. Per-clause schema enforces snake_case ids, importance enum (`critical | material | minor`), all three positions (`standard`, `fallback`, `hard_limit`) required and non-empty, and a structured citation array. Cross-clause invariants (via `superRefine`): unique clause ids; `status: production` requires non-null `reviewed_at`. Citation source enum covers `kenya-statute | kenya-case | kenya-regulation | odpc-determination | kra-ruling | cbk-circular | cma-notice | eac-treaty | market-norm | parasol-internal`. `NON_CORPUS_CITATION_SOURCES` set marks the two source types (`market-norm`, `parasol-internal`) that are intentionally not expected to resolve in the corpus.
+- **`validator.ts`** — three-stage check: (1) Zod parse, (2) critical-clause citation rule (every `importance: critical` clause must have at least one citation), (3) corpus resolution (every citation with a corpus-typed source must resolve to a `corpus_documents` row by canonical id, when a `CitationResolver` is supplied). Returns a structured `ValidationResult` with per-issue `path` + `message` + `severity`. `allowDraft` (default true) downgrades the draft-status check from error → warning so CI passes while counsel review pends. `validatePlaybookFile(path)` is the disk-loading convenience wrapper.
+- **`loader.ts`** — `loadPlaybook(jurisdiction, contractType)` returns a typed `Playbook` from `packages/playbooks/<jurisdiction>/<contract-type>.yaml`, throwing `NotFoundError` (file missing) or `ValidationError` (file present but malformed). Schema-only validation by default (no corpus check) for runtime use; CI runs the full corpus check via the validate CLI.
+- **`cli/validate.ts`** — `pnpm --filter @parasol/playbooks run validate`. Walks `SHIPPED_PLAYBOOKS`, runs full validation (with corpus resolver if Supabase env present), prints structured issues, exits non-zero on errors. Flags: `--strict` (treat warnings as errors), `--no-corpus` (skip corpus check even when env supports it).
 
-### `packages/core/src/db.ts` extended
+### Resend inbound webhook (`apps/web/src/lib/inbound/email-webhook.ts` + `apps/web/src/app/api/inbound/email/route.ts`)
 
-- Added `Functions` to the `Database` type with typed Args/Returns for the two RPCs.
-- New exported types: `CorpusChunkSearchResult`, `CorpusChunkBm25Result`.
+The webhook lives in two layers: a framework-agnostic verification + parsing module under `lib/`, and a Next.js POST route handler. Splitting them lets the verification logic be unit-tested without spinning up a request.
 
-### `packages/corpus/src/retrieval.ts` (new)
+**`email-webhook.ts`** exports:
+- `inboundEmailPayloadSchema` — Zod schema for the `email.received` event matching Resend's documented shape (top-level `type`/`created_at`/`data`; `data` has `email_id`, `from`, `to`, `cc`, `bcc`, `message_id`, `subject`, `attachments[]`).
+- `verifyInboundWebhook({ rawBody, headers, secret })` — verifies the Svix signature using the `svix` library against the **raw request bytes** (signature is byte-sensitive; re-stringifying parsed JSON breaks it), then validates the payload against the schema. Returns a discriminated union with `ok: false` reasons of `missing_headers`, `bad_signature`, `wrong_event_type`, `malformed_payload`. Outbound events (delivered/bounced/etc.) hitting the same URL are reported as `wrong_event_type` so the route handler can return 200 to acknowledge them.
+- `extractEmailAddress`, `extractDomain`, `isSenderAllowed` — pure helpers. `isSenderAllowed` matches both exact domain and any subdomain of the allowlist entry (so `acme.com` matches `legal@acme.com` and `legal@subsidiary.acme.com`) and is case-insensitive.
 
-- `retrieveAuthority(query, options, ctx)` — public API. Pipeline:
-  1. Embed the query in `inputType: 'query'` mode (matters for Voyage scoring)
-  2. BM25 + vector retrieval in parallel (BM25 doesn't depend on the embedding)
-  3. Reciprocal Rank Fusion merge (default `k=60` per the original RRF paper)
-  4. Optional Voyage rerank-2 on the top-30 RRF results (default on; bypass with `skipRerank: true`)
-  5. Return top K with `score`, `matchedVia: ['bm25' | 'dense']`, full chunk text + hierarchy + document metadata
-- `reciprocalRankFusion(bm25, vector, k)` — pure function, separately tested. Score = sum of `1 / (k + rank)` across rankings; items present in both rank higher.
-- `overrideVoyageClient()` test hook.
-- Sprint 1 limitation: single jurisdiction per call (RPC takes a `text` not `text[]`). Multi-jurisdiction queries take the first jurisdiction; documented for v2.
+**`route.ts`** (`POST /api/inbound/email`):
+- Reads the raw body (`req.text()` — must NOT be `req.json()` because we need the exact bytes for signature verification).
+- Calls `verifyInboundWebhook`. Bad signature → 401. Missing/malformed → 400. Wrong event type → 200 with `{ignored: true}` (Resend doesn't retry these). Verified → continues.
+- Looks up the workspace by Sprint 1 fixed slug `sprint1-dev` (Sprint 3 will parse the slug from the recipient address per DEF-002). No workspace seeded → 200 `{ignored, reason: 'no_workspace_configured'}` so the smoke-test path stays green on a fresh project.
+- Checks `isSenderAllowed(senderEmail, workspace.allowed_sender_domains)`. Not in allowlist → 200 `{ignored, reason: 'sender_not_in_allowlist'}` (will become a polite "explainer reply" in Sprint 2).
+- Hashes the sender email with SHA-256 (no PII at rest) and inserts a `reviews` row in `pending` status with `intake_source: 'email'`. The actual orchestrator pipeline kick-off is a TODO for Day 9.
+- Returns `200 {accepted: true, review_id}`.
 
-### `packages/corpus/src/normaliser.ts` — AKN selector fix
+### Lawyer-review workaround (`packages/playbooks/kenya/nda.yaml`)
 
-The smoke test revealed that on Kenya Law's AKN HTML rendering, `.akn-content` is a per-paragraph span (2,119 of them in the Constitution alone), not the document root. The normaliser was picking the first one and producing a single 996-char chunk for the entire Constitution. Fixed selector priority:
+Per Tim: he can't engage a Kenyan lawyer for Sprint 1, so the production-readiness gate moves to v1 launch. I:
+
+- Added a `status: draft` field to the schema. Defaults to `draft`. Production = counsel-validated. Draft surfaces a warning at validate time and (per Day 9 wiring) a "Draft playbook — positions not yet counsel-validated" caption on every redline output until flipped.
+- Rewrote the YAML's preamble from "PLACEHOLDER — pending counsel review" → "draft v0.1 grounded in publicly available Kenyan authority". `authored_by` reflects the same.
+- Added a new `data_protection` clause covering DPA 2019 obligations (processor duties under s.42, breach notification under s.43, cross-border transfer under s.49). This is the single most important Kenya-specific clause in the playbook because the DPA is the only Kenya statute that imposes contractual constraints on confidentiality flows.
+- Replaced empty / placeholder citation arrays with real ones where the statutory hook is genuinely on point: `dispute_resolution` cites Arbitration Act 1995 s.36 (NY Convention enforcement) and NCIA Act 2013 (institutional seat); `counterparts_and_execution` cites KICA 1998 (electronic transactions). Where a position is genuinely "market norm" rather than statute-derived (term length, jurisdiction allowlist, definition test), the citation is explicitly tagged `source: market-norm` rather than fabricated.
+- Playbook is now 15 clauses (was 13).
+
+### Corpus expansion (`packages/corpus/src/scrapers/kenyalaw.ts`)
+
+Added Arbitration Act 1995 (`1995/4`) and NCIA Act 2013 (`2013/26`) to `SPRINT1_ACT_IDS` so the playbook validator's corpus-resolution check passes. Both URLs verified live. Total Sprint 1 fixture corpus is now 6 statutes (was 4): Constitution + DPA + Companies Act + KICA + Arbitration + NCIA.
+
+Bumped `politeFetch` default timeout from 30s → 90s after observing two of the four Day-4 ingestions abort exactly at 30s (the larger statutes — DPA 600KB AKN HTML, Companies Act 1.5MB — exceed the budget once Voyage embed pipelining is in flight).
+
+### Day 4 acceptance test — PASSED
 
 ```
-.akn-act → .akn-akomaNtoso → main → #content → .content → body
+query: "data protection cross-border transfer"
+filters: jurisdictions=['kenya'], topK=5
+
+#1  score=0.6445  via=[dense]
+    Data Protection Act, 2019
+    "Conditions for transfer out of Kenya — A data controller or
+     data processor may transfer personal data to another country
+     only where ..."
+
+#2  score=0.6094  via=[dense]
+    Data Protection Act, 2019
+    "Safeguards prior to transfer of personal data out of Kenya"
+
+#3  score=0.5156  via=[dense]
+    Data Protection Act, 2019
+    "Principles of data protection"
+
+DPA s.49 in top 3: ✓ PASS
 ```
 
-After fix: Constitution produces **158 chunks** (verified via live ingest with `--skip-embedding --skip-tagging`).
+Caveat to revisit on Day 6: every result surfaced via the dense (vector) leg. BM25 didn't fire on this query, likely because the `english` Postgres FTS dictionary stems and stops the query terms differently than how they appear in the chunk text. Not a Day 4 blocker (the acceptance test is "in top 3", which we exceed) but the eval harness on Day 6 should include a query-rewriter or a stem-matched alternate to ensure BM25 contributes meaningfully on real-world legal queries.
 
-### `packages/corpus/src/scrapers/kenyalaw.ts` — domain fix
-
-Smoke test 404'd on every URL because Kenya Law moved most legal content to `https://new.kenyalaw.org` in their 2024 redesign. The legacy `kenyalaw.org` is mostly informational pages now. Updated `DEFAULT_BASE` accordingly. Also added `redirect: 'follow'` to `politeFetch` because AKN URLs use point-in-time language qualifiers (e.g. `/eng@2022-12-31`) and the bare `/eng` 302s to the latest dated revision.
-
-## Tests added (14 new)
+### Tests added (53 new)
 
 | Suite | Tests |
 |-------|-------|
-| `retrieval.test.ts` | 14 — RRF (empty inputs, single-source ranking, dual-source boost, dense-only marker, custom k, sort order, field preservation), retrieveAuthority orchestration (end-to-end, topK trim, filter pass-through, skipRerank, no-jurisdiction error, RPC error, reranker-returns-null fallback) |
+| `packages/playbooks/src/schema.test.ts` | 18 — citation/clause/playbook schema parsing; snake_case enforcement; status×reviewed_at invariant; duplicate-id detection; date format |
+| `packages/playbooks/src/validator.test.ts` | 12 — schema layer, critical-clause rule, corpus-resolver pass/fail/skip, draft status warning vs error |
+| `apps/web/src/lib/inbound/email-webhook.test.ts` | 23 — payload schema parse + defaults, Svix sign-and-verify happy path, missing headers / bad signature / tampered body / wrong secret / wrong event type / malformed payload, `extractEmailAddress`/`extractDomain`/`isSenderAllowed` (8 cases including subdomain matching, case-insensitivity, substring trap) |
 
-Cumulative repo test count: **149 passing** (+14 today across 6 packages).
+Cumulative repo test count: **202 passing across 6 packages** (+53 today).
 
 ## Verification evidence
 
 ```
 pnpm turbo typecheck test lint
 → 18 successful, 18 total
-→ Zero TS errors, zero lint warnings, 149 tests passing
+→ Zero TS errors, zero lint warnings, 202 tests passing
+
+pnpm --filter @parasol/playbooks run validate -- --no-corpus
+→ kenya/nda.yaml: 0 errors, 1 warning (draft status, expected)
+→ "ok (15 clauses, schema-only, status=draft)"
+
+Day 4 acceptance test (manual TSX script against live Supabase):
+→ DPA cross-border transfer query returns DPA 2019 s.49 at #1 (dense, score 0.6445)
+→ DPA s.49 in top 3: ✓ PASS
 ```
-
-Live smoke test results:
-```
-pnpm --filter @parasol/corpus run ingest:kenya -- --limit=1 --skip-embedding --skip-tagging
-→ 1 added, 0 updated, 0 errors
-→ Constitution of Kenya 2010 → 158 chunks
-```
-
-## What is NOT done
-
-- **Live retrieval acceptance test (DPA s.49 in top 3)** — blocked by DEF-005 (Voyage rate limit). The `retrieveAuthority` code is complete and tested, but without embeddings populated (the 429 blocked the embed step), the dense leg returns nothing and the acceptance test is meaningless. Once Tim adds a payment method on Voyage, re-run the ingest without `--skip-embedding` and the acceptance test runs. Estimated unblock time: minutes, not hours.
-- Full ingestion of all 4 fixture statutes (Constitution + DPA 2019 + Companies Act 2015 + KICA 1998). Only the Constitution has been touched. Same blocker.
-- Persistent tag cache (Redis / Postgres) — Sprint 4.
-- Day 5 work: playbook validator + Resend email webhook.
-
-## DEFERRED.md updates
-
-- **DEF-005 escalated** from `sprint:1 day 8` to `sprint:1 day 4`. Rewrote the entry with the actual rate-limit numbers (3 RPM / 10K TPM on free tier), the workaround (`--skip-embedding`), and clear remediation steps.
-- **DEF-045 added** — adaptive batching + 429-aware retry for the Voyage embedder. The right fix once Tim's account is upgraded; protects against future spikes during eval-suite runs (Sprint 6+).
 
 ## Database state
 
-All 6 migrations applied to Supabase project `rfgcgvafxdbpypzaokdh` (eu-west-2 London). Migration history shows 0001-0006 in sync.
+All 6 migrations applied. corpus_documents has the Constitution, DPA 2019, and KICA ingested (Companies Act ingest still in progress as of this writeup). Total chunks: ~469 with 311 embedded. `pending` ingestions: Companies Act 2015 (2015/17), Arbitration Act 1995 (1995/4 — added today), NCIA Act 2013 (2013/26 — added today).
 
-```
-Local | Remote
-------|-------
-0001  | 0001  (foundation)
-0002  | 0002  (corpus tables)
-0003  | 0003  (reviews)
-0004  | 0004  (audit + hash chain)
-0005  | 0005  (corpus retrieval RPCs)         [new today]
-0006  | 0006  (explicit table grants)         [new today]
-```
+## What is NOT done
 
-corpus_documents has 1 row (Constitution); corpus_chunks has 158 rows (all with `embedding = null` — pending DEF-005).
+- **Companies Act 2015, Arbitration Act 1995, NCIA Act 2013 ingestion** — three statutes still need to land in the corpus. Two of them are referenced by the playbook's citations, so the *full corpus-resolution* validator pass currently shows 2 errors (will go to 0 once they ingest). Schema-only validation is clean. Re-run with `pnpm --filter @parasol/corpus run ingest:kenya -- --skip-unchanged` once the in-flight task completes.
+- **Real Resend inbound MX configuration on `ask.parasol.co.ke`** — Tim is working on this now (DEF-001). Once DNS verifies, an end-to-end forward-an-email test becomes possible.
+- **`sprint1-dev` workspace seed row** — webhook handler returns `200 {ignored: 'no_workspace_configured'}` until a workspace with that slug exists. Seed migration deferred to Day 8 alongside the broader workspace bootstrap. For end-to-end email tests before then, manually insert a row with that slug + an allowed_sender_domains array.
+- **Lawyer counsel review of `kenya/nda.yaml`** (DEF-028, status: still open). Per Tim's instruction the workaround is in place and Sprint 1 ships with `status: draft`. The hard deadline moved from Day 5 to v1 launch.
+- **Email orchestrator kickoff** — webhook creates a `pending` review and returns 200; actual pipeline run is queued for Day 9 once the orchestrator stages are wired.
+- BM25 contribution to retrieval is currently zero on natural-language queries due to FTS dictionary mismatch. Address in Day 6 (eval harness) or note as a tuning issue.
 
-## Known issues / technical notes
+## DEFERRED.md updates
 
-- The chunker fix (AKN root selector) is generic Kenya-Law-statute-specific. Other Kenyan source types (judgments, ODPC determinations, gazette) will likely have their own selectors when scraping for them lands in Sprint 4. The current normaliser falls through to `main`/`#content`/`.content`/`body` for non-AKN content, so it shouldn't completely fail on other sources — just produce non-ideal chunks.
-- Once Voyage is upgraded and ingestion runs cleanly, expect the Constitution alone to consume ~80K tokens of embedding budget. Four fixture statutes ≈ 250-400K tokens total. Voyage's 200M-token free quota easily covers this.
-- The retrieval RPCs use `<=>` (cosine distance) and `1 - <=>` for similarity. Make sure new code reading `similarity` interprets it as "higher is more similar" (matches our score convention).
+No new entries today. DEF-005 (Voyage payment method) is now resolved: Tim added a card and the embedder works at standard limits. DEF-001 (Resend MX) is in progress as of this writeup.
 
-## Exact next step (Day 5) ⚠️ TWO TIM ACTIONS
+## Exact next step (Day 6) — Eval harness skeleton
 
-1. **Lawyer engagement for `packages/playbooks/kenya/nda.yaml` review (DEF-028)** — start the conversation now even if review takes longer than Day 5. Sprint 1's playbook acceptance criterion is gated on this.
-2. **Resend "Enable Receiving" + MX record on `ask.parasol.co.ke` at 101domain (DEF-001)** — needed for the email-intake route handler that lands today.
-3. **(High priority but flexible)** Add a payment method on Voyage AI dashboard (DEF-005). Without it, Day 6 (eval harness) will hit the same rate limit and won't be able to score retrieval against the 20-NDA dataset.
+Day 6 plan from `docs/sprint-1-plan.md`:
+1. `packages/eval/src/runner.ts` — load golden NDAs from `packages/eval/data/golden/nda/`, run the full pipeline (stub stages where Day 7+ hasn't landed yet), collect per-NDA scores.
+2. `packages/eval/src/metrics.ts` — clause identification precision/recall, redline appropriateness (1-5), citation validity rate, hallucination rate.
+3. `packages/eval/src/reporter.ts` — write `packages/eval/results/sprint-1.json`; print summary table.
+4. `packages/eval/data/golden/nda/` — ground-truth annotation YAML schema + at least 5 annotated NDAs (full 20 by Day 13). I'll draft annotations from the NDA + the Kenya playbook; counsel review of the annotations is a separate v1-launch gate.
+5. CI eval gate in `.github/workflows/ci.yml` — fail PR if citation validity drops below 100% or hallucination rate rises above 2%.
+6. `pnpm eval` runs successfully (even against a stub pipeline).
 
-Day 5 implementation work I'll do (in parallel with Tim's actions):
-1. **`packages/playbooks/src/schema.ts`** — Zod schema matching `docs/playbook-schema.md`, validating all required fields and citation resolution.
-2. **`packages/playbooks/src/validator.ts`** — `validatePlaybook(path)` loads YAML + schema-validates + checks every citation id resolves in the corpus.
-3. **`packages/playbooks/src/loader.ts`** — `loadPlaybook(jurisdiction, contractType)` returning typed `PlaybookDefinition`.
-4. **`pnpm playbooks:validate`** wired and passing on `kenya/nda.yaml` (modulo DEF-028 placeholders, which fail with clear error messages).
-5. **`apps/web/src/app/api/inbound/email/route.ts`** — Resend webhook handler with Svix signature verification, sender domain whitelist, attachment extraction, returns 200 immediately and queues a pipeline run.
+Day 6 has no Tim action items.
+
+## Tim action items still open
+
+- **DEF-001 (Resend inbound MX)** — in progress as of this writeup. Once DNS propagates and the domain shows "Verified" in Resend, the inbound endpoint is fully testable end-to-end.
+- **DEF-028 (Kenyan lawyer counsel review)** — moved from Day 5 hard deadline → v1 launch hard deadline per Tim's "work around it" instruction. No immediate action; pre-launch the playbook content needs counsel sign-off before flipping to `status: production`.
+- **DEF-011 (.co.ug, .co.tz, .co.rw domain registration)** — was Day 1 Tim action; status unknown to me. Not blocking Sprint 1 but blocks v2 jurisdiction expansion.

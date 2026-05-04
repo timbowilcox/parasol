@@ -41,7 +41,11 @@ export interface PoliteFetchOptions {
 }
 
 const DEFAULT_INTERVAL = 2000
-const DEFAULT_TIMEOUT = 30000
+// Bumped from 30s after Sprint 1 day 5 smoke test: both DPA 2019 (~600 KB
+// AKN HTML) and Companies Act 2015 (~1.5 MB) were timing out at 30s. 90s
+// gives headroom for large statutes without making accidental URL typos
+// hang too long.
+const DEFAULT_TIMEOUT = 90000
 
 export async function politeFetch(
   url: string,

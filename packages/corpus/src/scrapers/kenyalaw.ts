@@ -27,8 +27,9 @@ import { politeFetch } from './types.js'
 // legacy domain is mostly informational pages now.
 const DEFAULT_BASE = 'https://new.kenyalaw.org'
 
-// Sprint 1 fixture: the three acts called out in docs/sprint-1-plan.md
-// + Constitution. Full enumeration in Sprint 4.
+// Sprint 1 fixture: the three acts called out in docs/sprint-1-plan.md plus
+// the Constitution and the two acts cited by the Sprint 1 NDA playbook
+// (Arbitration Act 1995 and NCIA Act 2013). Full enumeration in Sprint 4.
 const SPRINT1_ACT_IDS: ReadonlyArray<{
   canonicalId: string
   title: string
@@ -38,6 +39,8 @@ const SPRINT1_ACT_IDS: ReadonlyArray<{
   { canonicalId: '2019/24', title: 'Data Protection Act, 2019', sourceType: 'statute' },
   { canonicalId: '2015/17', title: 'Companies Act, 2015', sourceType: 'statute' },
   { canonicalId: '1998/2', title: 'Kenya Information and Communications Act, 1998', sourceType: 'statute' },
+  { canonicalId: '1995/4', title: 'Arbitration Act, 1995', sourceType: 'statute' },
+  { canonicalId: '2013/26', title: 'Nairobi Centre for International Arbitration Act, 2013', sourceType: 'statute' },
 ]
 
 export interface KenyaLawScraperOptions {
