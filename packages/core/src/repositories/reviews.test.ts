@@ -16,6 +16,9 @@ const sampleReview: Review = {
   sender_email: null,
   original_filename: 'nda.pdf',
   error_message: null,
+  redline_docx_base64: null,
+  web_view_json: null,
+  email_body_json: null,
   created_at: '2026-05-04T00:00:00Z',
   updated_at: '2026-05-04T00:00:00Z',
 }

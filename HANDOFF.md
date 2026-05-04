@@ -1,81 +1,80 @@
-# Handoff: Sprint 1, Day 10 — Email intake completion
+# Handoff: Sprint 1, Day 11 — Web upload UI + review page + persistence
 
-Date: 2026-05-04
-Session type: Sprint 1 Day 10
+Date: 2026-05-05
+Session type: Sprint 1 Day 11
 
 ## What was completed
 
-Day 10 closes the email intake loop: the inbound webhook now hands off to the orchestrator end-to-end, and the customer receives a Resend reply with the redlined DOCX + structured summary. Five new modules; route handler upgraded with Vercel `after()` for post-response work; 23 new tests.
+Day 11 delivers the web-intake surface. Customers (and dev users) can now drop a contract at `/review/new`, get redirected to `/review/[id]`, watch the auto-refreshing status banner, and read the structured findings + download the redlined DOCX once processing completes. The relational tables (`extracted_clauses`, `issues`, `citations`) are now populated by the orchestrator's run so the review page renders without re-running the pipeline.
 
-### Document intake (`apps/web/src/lib/intake/extract-pages.ts`)
+### Migration 0007 — review artefacts inline storage
 
-`extractPages({ bytes, mimeType, filename? })` returns `{ ok: true; pages: PageInput[]; rawCharCount }` or a typed failure (`unsupported_mime` | `extraction_failed` | `empty_document`).
+Adds three columns to `reviews`:
+- `redline_docx_base64 text` — the DOCX bytes encoded inline. Sprint 1 NDAs are 5-50 KB; comfortably under Postgres row limits. v2 migrates to Supabase Storage (DEF-048 — new this session).
+- `web_view_json jsonb` — the assembled web view payload (`AssembledOutput.webView`). Hydrates `/review/[id]` without re-running the orchestrator.
+- `email_body_json jsonb` — `{ subjectSuffix, plainText, html }` exactly as sent in the Resend reply. Audit trail for the email path.
 
-- **PDF** via `pdf-parse/lib/pdf-parse.js` (deep import skips the package's debug harness in `index.js`). Splits the document text on `\f` so each page becomes a `PageInput` for quality-assess to score independently.
-- **DOCX** via `mammoth.extractRawText`. Word stores reflow not pages, so the result is a single `PageInput` with concatenated text.
-- **text/plain** passthrough — single `PageInput`.
-- **MIME normalisation** trusts the filename extension when the upstream sender uses `application/octet-stream`. Legacy `.doc` (application/msword) is rejected with `unsupported_mime`.
-- Empty PDF text on a multi-page document is a scan masquerading as digital — surfaced as `empty_document` with an explanatory detail. Rasterised vision intake is deferred (DEF-047 — new this session).
+### Persistence repositories (`packages/core/src/repositories/review-content.ts`)
 
-### Resend outbound (`apps/web/src/lib/email/resend-send.ts`)
+`ExtractedClauseRepository`, `IssueRepository`, `CitationRepository` — each with `insertMany(rows)` returning the inserted rows (so the caller can chain insert citations against newly-issued issue IDs) and a `listForReview(id)` / `listForIssues(issueIds)` reader. Empty-input fast paths short-circuit Supabase calls. `ReviewRepository.updateAssembled()` writes the three new artefact columns in a single update.
 
-Two thin `fetch` wrappers — no SDK dep:
+### `processReview` refactor — discriminated attachment source
 
-- `sendReply({ to, inReplyTo?, subject, text, html, attachments? })` POSTs to `https://api.resend.com/emails` with the workspace `from` (`PARASOL_OUTBOUND_FROM` env). Threads via `In-Reply-To` + `References` headers when `inReplyTo` is supplied. Attachments forwarded as `{ filename, content: contentBase64 }` per Resend's API.
-- `fetchInboundAttachment({ emailId, attachmentId })` GETs `/emails/{email_id}/attachments/{attachment_id}` and returns the raw bytes + Content-Type.
+The Day 10 helper signature was email-specific. Day 11 generalises:
 
-Both return discriminated unions (`{ ok: true; ... } | { ok: false; status; detail }`) so callers branch on `result.ok` rather than try/catch.
+```ts
+type AttachmentSource =
+  | { kind: 'email'; inboundEmailId; attachmentId; filename }
+  | { kind: 'inline'; bytes; mimeType; filename }
 
-### Pipeline-events binder (`apps/web/src/server/pipeline-events.ts`)
+type ProcessReviewInput = {
+  supabase, reviewId, workspaceId, attachment: AttachmentSource,
+  replyEmail?: { replyTo, emailMessageId, originalSubject }
+}
+```
 
-`bindEventsToReview({ supabase, reviewId, onPersistError? })` returns the `(event: PipelineEvent) => void` callback the orchestrator expects. Internally:
+Email path: `attachment.kind === 'email'` + `replyEmail` set → fetches via Resend + sends reply. Web path: `attachment.kind === 'inline'` (bytes already in hand from the multipart upload) + no `replyEmail` → no reply email is sent; the `/review/[id]` page surfaces the result. Both paths run the same orchestrator and persist via `persistOutputs` (clauses → issues → citations → assembled artefacts on the review row).
 
-- Wraps a `PipelineEventRepository.append(...)` call per event.
-- Fire-and-forget — errors surface to `onPersistError` (defaults to `console.error`). An observability write failing must not abort the actual review.
+### Web pages
 
-### Process-review orchestration helper (`apps/web/src/server/process-review.ts`)
+- **Root `/` (`apps/web/src/app/page.tsx`)** — Sprint 1 placeholder linking to `/review/new` and `/admin/corpus`.
+- **`/login`** — Sprint 1 stub. Real auth lands Sprint 2; this page documents the redirect target so `requireAuth()` doesn't 404 in dev.
+- **`/review/new`** — server component (auth guard via `requireAuth`) + client `UploadDropzone` component. Drag-drop + click-to-browse; client-side validation of MIME + extension + 10 MB cap; posts multipart to `/api/upload`; redirects to `/review/[id]` on 202.
+- **`/review/[id]`** — server component, RLS-scoped lookup. Branches on `review.status`:
+  - `pending` / `processing` → `<meta http-equiv="refresh" content="5">` polls until completion (DEF-049 replaces with SSE/RSC streaming for v1 launch).
+  - `failed` → status banner with `error_message` + retry CTA.
+  - `unsupported` → status banner explaining what Sprint 1 supports + retry CTA.
+  - `completed` → severity summary + per-issue cards (severity pill / clause id / confidence dot / current → recommended → reasoning → proposed redline → cited authority with `validated`/`unverified` styling) + extracted-clause reference list + "Download redlined .docx" button.
 
-The single entry point for "I have a `pending` review and an attachment, run the pipeline and reply." Used by Day 10's email path; Day 11's web upload path will call into the same helper.
+### Layout + design system (`apps/web/src/app/layout.tsx`, `globals.css`)
 
-Flow:
+Root layout shipping the BRAND.md-aligned design tokens: warm-white surfaces (`#F1EFE8` page background, `#FFFFFF` card primary), severity ramp pairs as CSS custom properties, sentence-case throughout, no decorative amber, two type weights only (400 / 500), serif page titles + sans body + mono citations. Components reference token names (`--bg-primary`, `--critical-fill`, `--font-serif`) so the dark-mode pass (Sprint 6+) is a single root-rule swap.
 
-1. Move review → `processing`
-2. Fetch attachment bytes via `fetchInboundAttachment`
-3. Extract pages via `extractPages` → on failure, route to `unsupported` branch
-4. Load + serialise the kenya/nda playbook (Sprint 1 always uses this; once we ship more playbooks, selection happens after triage)
-5. Build dependency-injected helpers — `AuthorityRetriever` wraps `@parasol/corpus.retrieveAuthority`, `CitationResolver` calls `CorpusRepository.findLatestDocument` with a citation-source → corpus-source-type mapping
-6. Run the orchestrator
-7. On `unsupported` (extraction failure or out-of-scope contract type) — send an explainer reply, no DOCX attachment
-8. On success — send the reply with `assembled.email.html`, `assembled.email.plainText`, and `assembled.redlineDocxBase64` as a Word attachment named `{originalFilename}-redlined.docx`
-9. Move review → `completed` / `unsupported` / `failed`
+### API routes
 
-Subject line: prefixes `Re:` (without double-prefixing if the inbound was already `Re:`) and appends `assembled.email.subjectSuffix`.
+- **`POST /api/upload`** — auth-guarded multipart handler. Validates type / size / extension; creates the `reviews` row scoped to the caller's workspace; reads bytes once and hands off to `processReview` via `next/server.after()`. `maxDuration = 120` matches the email path. Returns `{ reviewId }` for the dropzone to redirect against.
+- **`GET /api/review/[id]/redline.docx`** — auth-guarded redline download. Decodes the inline base64 column and streams it back with `Content-Type: ...wordprocessingml.document` + `Content-Disposition: attachment; filename="<original>-redlined.docx"` + `Cache-Control: private, no-store`. Returns 404 with `redline_unavailable` when the review hasn't completed.
 
-Persistence of issues/citations/clauses to the relational tables is deliberately Day 11 (web review page); Day 10 only updates the review row and surfaces results via the email reply.
+### Email route handler updates
 
-### Inbound route upgrade (`apps/web/src/app/api/inbound/email/route.ts`)
+The Day 10 inbound webhook handler updated to use the new `processReview` shape — `attachment: { kind: 'email', ... }` + `replyEmail: { ... }`. No behaviour change.
 
-After the synchronous Day 5 path (verify Svix → classify → allowlist → insert review row) returns `200`, `next/server.after()` runs `processReview(...)` post-response. `export const maxDuration = 120` keeps the Vercel function alive long enough for the heavy stages; Day 13 latency analysis will likely tighten this back to 60 once we have measurements.
-
-`after()` is the Vercel-recommended pattern for "respond to webhook fast, do the work after". A real queue (Inngest / Supabase cron) is DEF-018 and lands when we either self-host or hit Vercel's per-function limits.
-
-## Tests added (23 new — apps/web went 63 → 86)
+## Tests added (16 new — apps/web 86 → 96, core 60 → 66)
 
 | Suite | Tests |
 |-------|-------|
-| `apps/web/src/lib/intake/extract-pages.test.ts` | 8 — text/plain happy path + whitespace-empty rejection, MIME normalisation (octet-stream + .pdf, legacy .doc reject, unknown MIME), DOCX (mammoth happy path, whitespace-only, error path), PDF (form-feed splitting, empty-document path) |
-| `apps/web/src/lib/email/resend-send.test.ts` | 5 — sendReply (body shape + threading headers + attachments + Authorization, non-2xx failure, missing API key), fetchInboundAttachment (URL + auth, 404 path) |
-| `apps/web/src/server/pipeline-events.test.ts` | 3 — happy-path persistence, error forwarding to onPersistError, null-default normalisation |
-| `apps/web/src/server/process-review.test.ts` | 7 — happy path with reply send, two unsupported branches (extraction failure + triage rejection), three failed branches (attachment fetch / no-attachment / orchestrator throw), subject double-prefix prevention |
+| `packages/core/src/repositories/review-content.test.ts` | 6 — ExtractedClauseRepo (empty-input fast path, happy-path insert, error rethrow), IssueRepo (returns inserted rows for citation-foreign-key chaining), CitationRepo (empty-input fast path, `.in('issue_id', ids)` query) |
+| `apps/web/src/app/api/upload/route.test.ts` | 6 — happy-path PDF upload (review created + processReview invoked with correct shape), missing-file 400, unsupported-MIME 415, file-too-large 413, empty-file 400, octet-stream + .docx filename → resolved DOCX MIME |
+| `apps/web/src/app/api/review/[id]/redline.docx/route.test.ts` | 4 — happy-path 200 with bytes + content-disposition, 404 on missing review, 404 on review not yet completed, fallback filename when original is null |
 
-Cumulative repo test count: **384 passing across 6 packages** (+23 today).
+Cumulative repo test count: **400 passing across 6 packages** (+16 today).
 
 | Package | Tests |
 |---------|-------|
-| `@parasol/core` | 60 |
+| `@parasol/core` | 66 (+6) |
 | `@parasol/playbooks` | 38 |
 | `@parasol/eval` | 42 |
-| `@parasol/web` | 86 (+23) |
+| `@parasol/web` | 96 (+10) |
 | `@parasol/corpus` | 63 |
 | `@parasol/ai` | 95 |
 
@@ -83,40 +82,51 @@ Cumulative repo test count: **384 passing across 6 packages** (+23 today).
 
 ```
 pnpm turbo typecheck test lint --force
-→ 18/18 successful, 384 tests passing
+→ 18/18 successful, 400 tests passing
 → Zero TS errors, zero lint warnings
 ```
 
+## Schema relaxation: SupabaseClient generic
+
+`packages/core/src/repositories/types.ts` widens the `SupabaseClient` re-export from `SupabaseClient<Database>` (2-param) to `SupabaseClient<Database, any, any>` (loose) so the SSR client from `@supabase/ssr` (which surfaces a 5-param generic with a resolved schema literal) can be passed to repositories without a cast. Both clients have the same runtime surface; the looser generic just stops TypeScript from rejecting one when the other is expected.
+
+This change touched `process-review.ts` and `pipeline-events.ts` to import `SupabaseClient` from `@parasol/core` instead of `@supabase/supabase-js`.
+
 ## What is NOT done
 
-- **Live forward test on a real NDA** — the inbound webhook has only ever received synthetic test fixtures; the real test happens at deployment time when Tim forwards an NDA to `*@ask.parasol.co.ke`. No code change required, but the smoke is on the deployment runbook (Day 13).
-- **Vision-degraded intake** — DEF-047 (new). Scans + photographs land in the `empty_document` branch and get the explainer reply.
-- **Issues / citations persistence to the relational tables** — Day 11 (web review page) wires the inserts. Day 10 ships the email reply only; the review row holds intake metadata + status + error_message.
-- **`pnpm pipeline:smoke` CLI** — was deferred from Day 9; still not on the critical path.
-- **`p95 latency measured on 3 test NDAs`** — needs the live forward test above.
+- **Real Supabase Auth sign-in flow** — `/login` is a stub. Sprint 2 wires email magic link + OAuth (Microsoft, Google) per CLAUDE.md's auth section.
+- **Server-Sent Events / RSC streaming progress** — DEF-049 (new). The 5-second meta-refresh polling is the Sprint 1 floor; it's annoying but functional.
+- **Supabase Storage migration for redline bytes** — DEF-048 (new). Inline base64 works for Sprint 1 NDAs; bigger contracts in v2 would need this.
+- **Audit log entries for upload + review events** — the per-stage audit-log writes are pending. Day 12 has slack to add `review.created` / `review.completed` rows; if not, post-launch hardening picks it up.
+- **Live forward test on a real NDA via the web upload** — needs deployment. Day 13 smoke test will exercise this.
+- **Multi-attachment uploads** — single-file Sprint 1; cover-sheet + contract bundles are deferred.
 
 ## Known issues / technical notes
 
-- **`maxDuration = 120` is provisional**: Vercel's hobby tier caps at 60s; Pro caps at 300s. Sprint 1 target is 60s p95 — Day 13's measurement decides whether 60 is safe or whether we need Pro / chunked processing. Tim's deployment plan has us on Pro from launch, so 120 is fine for now.
-- **Attachment loop only processes `data.attachments[0]`**: real customer emails sometimes include cover-sheet PDFs alongside the contract. Picking the first attachment matches Sprint 1 simplicity; Day 11 (web upload) handles multi-attachment selection explicitly. If a real test surfaces this as a friction point, escalate to a new DEF.
-- **No retry on Resend reply send failure**: if Resend returns 5xx, the review status moves to `failed` and the customer doesn't receive a reply. Operationally, a re-trigger from the admin UI (DEF-038) is the answer; sketching that in Day 11+ is fine.
-- **Subject formatting heuristic**: `originalSubject.toLowerCase().startsWith('re:')` catches the common case; "RE:" / "Re :" / threaded-prefix replies (e.g., "Aw:" in German) fall through. The mis-formatted subject is cosmetic — the customer still gets the right reply.
-- **Pipeline event persistence is best-effort**: the orchestrator's `emitEvent` is sync; we await nothing. If the workspace's Supabase write fails the orchestrator still finishes and the customer still gets their reply — observability data lost in that one row only. This is intentional per `bindEventsToReview`'s docstring.
+- **Polling vs streaming**: the meta-refresh approach reloads the whole page every 5 seconds. In a live deployment this triggers a fresh server round-trip + RLS check per refresh, which is fine for the dev volume but should be replaced before public launch (DEF-049).
+- **`extracted_clause_id` is null on issues**: the orchestrator's `PipelineIssue.clauseId` is a string clause id, not the inserted row's UUID. Linking issues to clauses by FK would require a second pass (insert clauses, build a `clauseId → uuid` map, then insert issues). Sprint 1 leaves the FK null and joins on the string `clause_id` for the review page. The schema-level FK column is preserved for v2.
+- **`source_url` is null on inserted citations**: `PipelineCitation` doesn't carry a URL today. The verify-citations step resolves canonical IDs to corpus rows but doesn't propagate the source URL through to the issue model. Day 12 polish or DEF-049-adjacent work can backfill from `corpus_documents.source_url`.
+- **`inline` bytes path doesn't fail-soft on overlarge files post-upload**: the multipart handler enforces 10 MB at upload time; once `processReview` is on the after-response side, an in-memory copy of the bytes lives until extract-pages finishes. Vercel function memory caps (1 GB on Pro) are far above this; just noting the model.
+- **Top of `/review/[id]` shows "Completed" banner even on zero-issue reviews**: that's intentional — a clean contract is a successful review, not nothing. Issue list shows "No issues identified against the playbook."
 
 ## Database state
 
-Unchanged. Day 10 only adds application code on top of the schema landed in migrations 0003 + 0004.
+Migration 0007 added: `reviews.redline_docx_base64`, `reviews.web_view_json`, `reviews.email_body_json`. `db.ts` updated with the new columns + the existing `extracted_clauses`, `issues`, `citations` table types (these were always in 0003 but hadn't been declared in `db.ts` because no app code touched them until today).
 
-## Exact next step (Day 11) — Web upload UI + review page
+Tim — when convenient, run `pnpm db:migrate` to apply 0007 to the dev project. The web upload flow will fail on the `updateAssembled` step until it lands.
 
-Day 11 plan from `docs/sprint-1-plan.md`:
-1. **Web upload page at `/upload`** — drag/drop + file picker; calls a new `/api/upload` route handler that uploads to Supabase Storage, inserts a `review` row, then runs `processReview` (same helper as Day 10) via `after()`.
-2. **Review page at `/review/[id]`** — server component that loads the review + assembled web view JSON; renders the issue list, citation badges (validated / unverified), and a download link for the redlined DOCX.
-3. **Issues / citations / extracted-clauses persistence** — Day 11 adds repositories + writes from `processReview` so the web review page has data to render.
-4. **Auth gate** — pages require workspace membership; the route handler enforces RLS via the user's session.
-5. **`pnpm test` includes the upload flow tests + the review page rendering tests.**
+## Exact next step (Day 12) — Corpus admin UI complete
 
-## Tim action items still open
+Day 12 plan from `docs/sprint-1-plan.md`:
+1. **`apps/web/src/app/admin/corpus/page.tsx`** — replace the Day 1 stub with the real implementation: health summary card, sources list with per-source status / last_run_at / document_count, recent runs panel, "Run now" button per source.
+2. **`apps/web/src/app/api/admin/corpus/sources/route.ts`** — GET sources list (currently a stub returning [])
+3. **`apps/web/src/app/api/admin/corpus/runs/route.ts`** — GET recent runs
+4. **`apps/web/src/app/api/admin/corpus/sources/[id]/run/route.ts`** — POST triggers `runIngestion()` from `@parasol/corpus`
+5. All admin actions write `audit_log` entries namespaced `admin.corpus.*`
+6. UI matches the parasol_corpus_admin design from chat artefacts (2026-05-03)
+
+## Tim action items
 
 - **DEF-028** (counsel review of playbook + annotations): production gate is v1 launch.
 - **DEF-011** (.co.ug, .co.tz, .co.rw domain registration): not blocking Sprint 1.
+- **`pnpm db:migrate`** to apply migration 0007 to the dev project — required before the web upload flow can complete a review end-to-end. Email path continues to work without it (the persist step would fail on the assembled-update column write but the reply send is independent).

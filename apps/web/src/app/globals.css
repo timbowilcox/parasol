@@ -1,0 +1,272 @@
+/* Parasol design system — BRAND.md aligned.
+ *
+ * Color tokens map to roles, not raw colors. Layout components reference
+ * --background-*, --text-*, --severity-*. Restrained palette: warm whites
+ * for surfaces, subtle borders, severity ramps for meaning only. Never
+ * use the brand amber (#FAEEDA / #854F0B) decoratively — it lives only on
+ * the parasol mark.
+ */
+
+:root {
+  /* Surfaces */
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8f6f1;
+  --bg-tertiary: #f1efe8;
+
+  /* Text */
+  --text-primary: #1a1a18;
+  --text-secondary: #5f5e5a;
+  --text-tertiary: #888780;
+
+  /* Borders */
+  --border-default: rgba(0, 0, 0, 0.08);
+  --border-hover: rgba(0, 0, 0, 0.16);
+
+  /* Semantic ramps — fill / text pairs for badges and pills */
+  --critical-fill: #fcebeb;
+  --critical-text: #791f1f;
+  --material-fill: #faeeda;
+  --material-text: #633806;
+  --minor-fill: #f1efe8;
+  --minor-text: #444441;
+  --success-fill: #eaf3de;
+  --success-text: #27500a;
+  --info-fill: #e6f1fb;
+  --info-text: #0c447c;
+
+  /* Type stack — fall back gracefully where Inter / Source Serif 4 aren't loaded */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
+  --font-serif: 'Source Serif 4', 'Source Serif Pro', Georgia, 'Times New Roman', serif;
+  --font-mono: 'JetBrains Mono', 'IBM Plex Mono', Consolas, 'Courier New', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html, body {
+  margin: 0;
+  padding: 0;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 15px;
+  font-weight: 400;
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+a {
+  color: var(--info-text);
+  text-decoration: none;
+}
+a:hover { text-decoration: underline; }
+
+button {
+  font-family: inherit;
+  font-size: inherit;
+  cursor: pointer;
+}
+
+/* ─── Page chrome ─── */
+
+.page {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 64px 32px 96px;
+}
+
+.page-title {
+  font-family: var(--font-serif);
+  font-size: 32px;
+  font-weight: 500;
+  margin: 0 0 8px;
+  letter-spacing: -0.01em;
+}
+
+.page-subtitle {
+  color: var(--text-secondary);
+  margin: 0 0 32px;
+}
+
+/* ─── Cards ─── */
+
+.card {
+  background: var(--bg-primary);
+  border: 0.5px solid var(--border-default);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.card + .card {
+  margin-top: 16px;
+}
+
+/* ─── Severity ─── */
+
+.severity-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+.severity-critical { background: var(--critical-fill); color: var(--critical-text); }
+.severity-material { background: var(--material-fill); color: var(--material-text); }
+.severity-minor    { background: var(--minor-fill);    color: var(--minor-text); }
+
+.issue-card {
+  background: var(--bg-primary);
+  border: 0.5px solid var(--border-default);
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 12px;
+}
+.issue-card.critical { border-left: 3px solid var(--critical-text); border-top-left-radius: 0; border-bottom-left-radius: 0; }
+.issue-card.material { border-left: 3px solid var(--material-text); border-top-left-radius: 0; border-bottom-left-radius: 0; }
+
+.issue-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+.issue-clause-id {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.issue-section {
+  margin: 12px 0 0;
+}
+.issue-section h4 {
+  margin: 0 0 4px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+}
+.issue-section p {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+/* ─── Confidence dot ─── */
+
+.confidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.confidence-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.confidence-high { background: var(--success-text); }
+.confidence-medium { background: #ce8a2e; }
+.confidence-manual { background: var(--text-tertiary); }
+
+/* ─── Citations ─── */
+
+.citation {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--info-text);
+}
+.citation::after { content: ' \2197'; }
+.citation.unverified {
+  color: var(--text-tertiary);
+}
+.citation.unverified::after { content: ' (unverified)'; }
+
+/* ─── Buttons ─── */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  border: 0.5px solid var(--border-default);
+  border-radius: 8px;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.btn:hover { border-color: var(--border-hover); }
+.btn-primary {
+  background: var(--text-primary);
+  color: var(--bg-primary);
+  border-color: var(--text-primary);
+}
+.btn-primary:hover { color: var(--bg-primary); text-decoration: none; }
+
+/* ─── Upload dropzone ─── */
+
+.dropzone {
+  background: var(--bg-primary);
+  border: 0.5px dashed var(--border-default);
+  border-radius: 12px;
+  padding: 56px 24px;
+  text-align: center;
+  transition: border-color 0.12s ease;
+}
+.dropzone.dragover {
+  border-color: var(--text-secondary);
+  border-style: solid;
+}
+.dropzone input { display: none; }
+.dropzone label {
+  cursor: pointer;
+  color: var(--info-text);
+  font-weight: 500;
+}
+
+/* ─── Status banner ─── */
+
+.status-banner {
+  background: var(--info-fill);
+  color: var(--info-text);
+  border-radius: 8px;
+  padding: 12px 16px;
+  margin: 16px 0;
+}
+.status-banner.failed { background: var(--critical-fill); color: var(--critical-text); }
+.status-banner.unsupported { background: var(--material-fill); color: var(--material-text); }
+.status-banner.completed { background: var(--success-fill); color: var(--success-text); }
+
+/* ─── Summary stats row ─── */
+
+.summary-row {
+  display: flex;
+  gap: 24px;
+  flex-wrap: wrap;
+  margin-bottom: 24px;
+}
+.summary-stat {
+  background: var(--bg-primary);
+  border: 0.5px solid var(--border-default);
+  border-radius: 12px;
+  padding: 16px 20px;
+  flex: 1 1 140px;
+}
+.summary-stat-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-tertiary);
+  margin: 0 0 4px;
+}
+.summary-stat-value {
+  font-family: var(--font-serif);
+  font-size: 28px;
+  font-weight: 500;
+  margin: 0;
+}

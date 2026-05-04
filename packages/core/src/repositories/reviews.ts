@@ -77,4 +77,35 @@ export class ReviewRepository extends BaseRepository {
     if (!data) throw new NotFoundError('Review', id)
     return data
   }
+
+  // Persist the orchestrator's assembled outputs onto the review row. Sprint 1
+  // stores the redline DOCX inline as base64 (DEF-048 migrates to Supabase
+  // Storage in v2); the web view JSON hydrates /review/[id] without
+  // re-running the orchestrator; the email body JSON keeps an audit trail of
+  // exactly what we sent.
+  async updateAssembled(
+    id: string,
+    artefacts: {
+      redlineDocxBase64: string
+      webViewJson: unknown
+      emailBodyJson: unknown
+    },
+  ): Promise<Review> {
+    const update: Partial<ReviewInsertRow> = {
+      redline_docx_base64: artefacts.redlineDocxBase64,
+      web_view_json: artefacts.webViewJson,
+      email_body_json: artefacts.emailBodyJson,
+      updated_at: new Date().toISOString(),
+    }
+    const { data, error } = await this.supabase
+      .from('reviews')
+      .update(update)
+      .eq('id', id)
+      .select('*')
+      .single()
+
+    if (error) throw error
+    if (!data) throw new NotFoundError('Review', id)
+    return data
+  }
 }

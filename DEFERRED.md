@@ -163,6 +163,18 @@ Path A architecture means Parasol is a US-incorporated SaaS selling cross-border
 - **Why it matters when picked up**: Without this, an outbound response that bounces or gets marked as spam disappears from operator visibility. The customer assumes Parasol ignored them. Long-term reputation risk on Resend's sending IPs if complaint rate goes uncaught.
 - **Whose action**: Claude Code (handler + table + activity feed wiring); Tim (configure the second webhook in Resend → Webhooks once handler ships)
 
+#### DEF-049: Server-Sent Events / RSC streaming for /review/[id] live progress
+- **Trigger**: `phase:v1-launch-hardening`
+- **What**: The Sprint 1 day-11 review page polls every 5 seconds via `<meta http-equiv="refresh">` while the review is in `pending` / `processing`. Replace with either a Server-Sent Events stream (the orchestrator's `pipeline_events` table is the natural source) or a Next 16 RSC progressive-render pipeline that suspends until completion. Either way, the user gets stage-by-stage updates ("Identifying clauses → Applying playbook → Verifying citations") instead of a static "processing…" banner that flips to the result.
+- **Why deferred**: The static-poll loop is functional and removes the most expensive failure mode (browser stuck on a stale page). Streaming is polish — meaningful UX improvement but not Sprint 1 blocking.
+- **Whose action**: Claude Code
+
+#### DEF-048: Migrate redline DOCX bytes from inline base64 to Supabase Storage
+- **Trigger**: `phase:v1-launch-hardening` OR `condition:single-review-base64-exceeds-1mb`
+- **What**: Migration 0007 adds `redline_docx_base64` as a TEXT column on `reviews`. Sprint 1 NDAs are 5-50 KB raw, well under any practical row-size concern, but storing binary as base64 in Postgres scales poorly — bytea is more efficient, and Supabase Storage with signed URLs is the canonical answer. Migrate by: (1) creating a `reviews` Storage bucket with workspace-scoped RLS-equivalent policies, (2) updating the persist step in process-review.ts to upload bytes and write the storage path to a new `redline_docx_storage_path` column, (3) updating /api/review/[id]/redline.docx to redirect to a 5-minute signed URL, (4) backfilling existing rows, (5) dropping the inline column.
+- **Why deferred**: Adds a Supabase Storage bucket + RLS-equivalent policy work that's outside the day-11 critical path. Inline storage works fine for Sprint 1 NDA sizes; the URL surface (`/api/review/[id]/redline.docx`) is identical so the migration is internal only.
+- **Whose action**: Claude Code
+
 #### DEF-047: Vision-degraded intake — rasterise scanned PDFs and photograph attachments
 - **Trigger**: `sprint:1 day 13` OR `phase:v1-launch-hardening`
 - **What**: The Sprint 1 day-10 intake helper at `apps/web/src/lib/intake/extract-pages.ts` handles the clean path only: digital PDFs (text extracted via pdf-parse), DOCX (mammoth), text/plain. Scanned PDFs and photographs hit the `empty_document` failure branch instead of being routed to the orchestrator's `extract-text-degraded` stage (which already exists and accepts `imageBase64` + `imageMimeType` per page). Add a vision-degraded path: detect when a PDF has zero extractable text but high page count, rasterise each page to PNG (via `pdfjs-dist` + `canvas` or a serverless-friendly alternative), populate the `imageBase64` field on each `PageInput`, and let the orchestrator's quality-assess stage route to the Sonnet vision extractor.

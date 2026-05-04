@@ -195,12 +195,17 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         supabase,
         reviewId: review.id,
         workspaceId: workspace.id,
-        replyTo: senderAddress,
-        emailMessageId: data.message_id,
-        inboundEmailId: data.email_id,
-        attachmentId: firstAttachment?.id ?? null,
-        attachmentFilename: firstAttachment?.filename ?? null,
-        originalSubject: data.subject,
+        attachment: {
+          kind: 'email',
+          inboundEmailId: data.email_id,
+          attachmentId: firstAttachment?.id ?? null,
+          filename: firstAttachment?.filename ?? null,
+        },
+        replyEmail: {
+          replyTo: senderAddress,
+          emailMessageId: data.message_id,
+          originalSubject: data.subject,
+        },
       })
     } catch (cause) {
       // processReview is supposed to swallow its own errors and return a

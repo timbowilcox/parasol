@@ -69,6 +69,11 @@ export type ReviewRow = {
   sender_email: string | null
   original_filename: string | null
   error_message: string | null
+  // Migration 0007 — Sprint 1 inline storage for assembled outputs.
+  // v2 migrates redline bytes to Supabase Storage (DEF-048).
+  redline_docx_base64: string | null
+  web_view_json: unknown | null
+  email_body_json: unknown | null
   created_at: string
   updated_at: string
 }
@@ -85,10 +90,97 @@ export type ReviewInsert = {
   sender_email?: string | null
   original_filename?: string | null
   error_message?: string | null
+  redline_docx_base64?: string | null
+  web_view_json?: unknown | null
+  email_body_json?: unknown | null
   created_at?: string
   updated_at?: string
 }
 export type ReviewUpdate = Partial<ReviewInsert>
+
+// ─── extracted_clauses, issues, citations (migration 0003) ────────────────
+
+export type ExtractedClauseRow = {
+  id: string
+  review_id: string
+  clause_id: string
+  display_name: string
+  clause_type: string | null
+  raw_text: string
+  section_reference: string | null
+  clause_order: number
+  created_at: string
+}
+export type ExtractedClauseInsert = {
+  id?: string
+  review_id: string
+  clause_id: string
+  display_name: string
+  clause_type?: string | null
+  raw_text: string
+  section_reference?: string | null
+  clause_order: number
+  created_at?: string
+}
+export type ExtractedClauseUpdate = Partial<ExtractedClauseInsert>
+
+export type IssueRow = {
+  id: string
+  review_id: string
+  extracted_clause_id: string | null
+  clause_id: string
+  severity: 'critical' | 'material' | 'minor'
+  confidence: 'high' | 'medium' | 'manual_review_recommended'
+  current_position: string
+  recommended_position: string
+  reasoning: string
+  redline_text: string | null
+  issue_order: number
+  created_at: string
+}
+export type IssueInsert = {
+  id?: string
+  review_id: string
+  extracted_clause_id?: string | null
+  clause_id: string
+  severity: 'critical' | 'material' | 'minor'
+  confidence: 'high' | 'medium' | 'manual_review_recommended'
+  current_position: string
+  recommended_position: string
+  reasoning: string
+  redline_text?: string | null
+  issue_order: number
+  created_at?: string
+}
+export type IssueUpdate = Partial<IssueInsert>
+
+export type CitationRow = {
+  id: string
+  issue_id: string
+  corpus_chunk_id: string | null
+  source_type: string
+  canonical_id: string
+  section: string | null
+  display_text: string
+  source_url: string | null
+  validated: boolean
+  validation_error: string | null
+  created_at: string
+}
+export type CitationInsert = {
+  id?: string
+  issue_id: string
+  corpus_chunk_id?: string | null
+  source_type: string
+  canonical_id: string
+  section?: string | null
+  display_text: string
+  source_url?: string | null
+  validated?: boolean
+  validation_error?: string | null
+  created_at?: string
+}
+export type CitationUpdate = Partial<CitationInsert>
 
 // ─── pipeline_events (migration 0003) ───────────────────────────────────────
 // One row per stage transition (started / completed / failed / retried).
@@ -313,6 +405,24 @@ export type Database = {
         Row: ReviewRow
         Insert: ReviewInsert
         Update: ReviewUpdate
+        Relationships: []
+      }
+      extracted_clauses: {
+        Row: ExtractedClauseRow
+        Insert: ExtractedClauseInsert
+        Update: ExtractedClauseUpdate
+        Relationships: []
+      }
+      issues: {
+        Row: IssueRow
+        Insert: IssueInsert
+        Update: IssueUpdate
+        Relationships: []
+      }
+      citations: {
+        Row: CitationRow
+        Insert: CitationInsert
+        Update: CitationUpdate
         Relationships: []
       }
       corpus_sources: {

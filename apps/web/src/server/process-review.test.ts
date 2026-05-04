@@ -40,6 +40,12 @@ vi.mock('./pipeline-events.js', () => ({
 }))
 
 const updateStatusMock = vi.fn(async () => ({ id: 'r-1' }))
+const updateAssembledMock = vi.fn(async () => ({ id: 'r-1' }))
+const insertManyClausesMock = vi.fn(async () => [])
+const insertManyIssuesMock = vi.fn(async (rows: { clause_id: string }[]) =>
+  rows.map((r, i) => ({ id: `iss-${i}`, clause_id: r.clause_id })),
+)
+const insertManyCitationsMock = vi.fn(async () => [])
 
 vi.mock('@parasol/core', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@parasol/core')>()
@@ -47,6 +53,16 @@ vi.mock('@parasol/core', async (importOriginal) => {
     ...actual,
     ReviewRepository: vi.fn().mockImplementation(() => ({
       updateStatus: updateStatusMock,
+      updateAssembled: updateAssembledMock,
+    })),
+    ExtractedClauseRepository: vi.fn().mockImplementation(() => ({
+      insertMany: insertManyClausesMock,
+    })),
+    IssueRepository: vi.fn().mockImplementation(() => ({
+      insertMany: insertManyIssuesMock,
+    })),
+    CitationRepository: vi.fn().mockImplementation(() => ({
+      insertMany: insertManyCitationsMock,
     })),
   }
 })
@@ -60,12 +76,17 @@ const baseInput = {
   supabase: {} as never,
   reviewId: 'r-1',
   workspaceId: 'ws-1',
-  replyTo: 'sender@example.com',
-  emailMessageId: '<msg@example.com>',
-  inboundEmailId: 'em-1',
-  attachmentId: 'att-1',
-  attachmentFilename: 'contract.pdf',
-  originalSubject: 'NDA review',
+  attachment: {
+    kind: 'email' as const,
+    inboundEmailId: 'em-1',
+    attachmentId: 'att-1',
+    filename: 'contract.pdf',
+  },
+  replyEmail: {
+    replyTo: 'sender@example.com',
+    emailMessageId: '<msg@example.com>',
+    originalSubject: 'NDA review',
+  },
 }
 
 beforeEach(() => {
@@ -198,7 +219,10 @@ describe('processReview — failed branches', () => {
   })
 
   it('marks the review failed when there is no attachment id', async () => {
-    const result = await processReview({ ...baseInput, attachmentId: null })
+    const result = await processReview({
+      ...baseInput,
+      attachment: { ...baseInput.attachment, attachmentId: null },
+    })
     expect(result.ok).toBe(false)
     if (result.ok) return
     expect(result.status).toBe('failed')
@@ -251,7 +275,10 @@ describe('processReview — subject formatting', () => {
     } as never)
     vi.mocked(sendReply).mockResolvedValue({ ok: true, id: 'em' })
 
-    await processReview({ ...baseInput, originalSubject: 'Re: NDA' })
+    await processReview({
+      ...baseInput,
+      replyEmail: { ...baseInput.replyEmail, originalSubject: 'Re: NDA' },
+    })
 
     const sendArg = vi.mocked(sendReply).mock.calls[0]![0]
     // Subject should be "Re: NDA — review · 0 issues", not "Re: Re: NDA …"

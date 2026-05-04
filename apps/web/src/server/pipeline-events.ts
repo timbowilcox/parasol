@@ -11,12 +11,10 @@
 // `runOrchestrator({ ..., emitEvent })`.
 
 import type { PipelineEvent } from '@parasol/ai'
-import { PipelineEventRepository } from '@parasol/core'
-import type { SupabaseClient } from '@supabase/supabase-js'
-import type { Database } from '@parasol/core'
+import { PipelineEventRepository, type SupabaseClient } from '@parasol/core'
 
 export interface BindEventsInput {
-  supabase: SupabaseClient<Database>
+  supabase: SupabaseClient
   reviewId: string
   // Optional sink for failed persistence — used by tests. Defaults to
   // console.error so production gets stderr output captured by the host.
