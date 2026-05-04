@@ -121,3 +121,76 @@ export function isSenderAllowed(senderEmail: string, allowedDomains: readonly st
     return lower === a || lower.endsWith('.' + a)
   })
 }
+
+// ─── Recipient classification ───────────────────────────────────────────────
+// The Resend webhook receives events for every parasol.co.ke address (root +
+// every subdomain), because the MX record is set per-domain at the registrar
+// and we point ask.parasol.co.ke at Resend. The handler must classify each
+// inbound by the recipient and route accordingly.
+
+export const PARASOL_ROOT_DOMAIN = 'parasol.co.ke'
+export const INTAKE_SUBDOMAIN = 'ask.parasol.co.ke'
+
+export type RecipientClassification =
+  // At least one recipient at ask.parasol.co.ke (or any future intake
+  // subdomain). Triggers the contract intake pipeline. Sprint 3 (DEF-002)
+  // expands this to ask@<workspace-slug>.parasol.co.ke; the classifier
+  // already accepts those because it does an endsWith check.
+  | { kind: 'intake'; intakeRecipient: string }
+  // Recipients only at the root parasol.co.ke (e.g. tim@parasol.co.ke,
+  // hello@parasol.co.ke). Human-addressed mail; out of scope for v1. Log
+  // and ignore.
+  | { kind: 'human_root'; recipients: readonly string[] }
+  // Recipients at a subdomain we don't recognise. Possible misconfiguration
+  // (a new subdomain MX'd at Resend without a handler) or a probe. Log a
+  // warning so it surfaces in operational dashboards.
+  | { kind: 'unexpected'; recipients: readonly string[] }
+  // No parasol.co.ke recipients at all — shouldn't normally happen because
+  // Resend only delivers mail addressed to our domains. Treat as unexpected.
+  | { kind: 'foreign'; recipients: readonly string[] }
+
+// Inspect a `data.to` array and decide where to route. Priority: intake
+// wins over human_root wins over unexpected wins over foreign. So a single
+// email cc'd to both intake@... and tim@... still triggers the pipeline.
+export function classifyRecipients(to: readonly string[]): RecipientClassification {
+  const intakeMatch = to.find((addr) => isAtIntakeSubdomain(addr))
+  if (intakeMatch) {
+    return { kind: 'intake', intakeRecipient: extractEmailAddress(intakeMatch) ?? intakeMatch }
+  }
+
+  const parasolDomainAddrs = to.filter((addr) => isAtParasolDomain(addr))
+  if (parasolDomainAddrs.length === 0) {
+    return { kind: 'foreign', recipients: to }
+  }
+
+  // Among the parasol-domain recipients, are any on a non-intake subdomain?
+  const subdomained = parasolDomainAddrs.filter((addr) => {
+    const domain = extractDomain(extractEmailAddress(addr) ?? addr)
+    return domain !== null && domain.toLowerCase() !== PARASOL_ROOT_DOMAIN
+  })
+  if (subdomained.length > 0) {
+    return { kind: 'unexpected', recipients: subdomained }
+  }
+
+  return { kind: 'human_root', recipients: parasolDomainAddrs }
+}
+
+// Returns true if `addr` is at the intake subdomain `ask.parasol.co.ke`.
+// Sprint 1 only handles this single fixed subdomain; the workspace-prefixed
+// pattern `ask@<slug>.parasol.co.ke` is added in Sprint 3 (DEF-002).
+export function isAtIntakeSubdomain(addr: string): boolean {
+  const email = extractEmailAddress(addr)
+  if (!email) return false
+  const domain = extractDomain(email)
+  if (!domain) return false
+  return domain.toLowerCase() === INTAKE_SUBDOMAIN
+}
+
+export function isAtParasolDomain(addr: string): boolean {
+  const email = extractEmailAddress(addr)
+  if (!email) return false
+  const domain = extractDomain(email)
+  if (!domain) return false
+  const lower = domain.toLowerCase()
+  return lower === PARASOL_ROOT_DOMAIN || lower.endsWith('.' + PARASOL_ROOT_DOMAIN)
+}

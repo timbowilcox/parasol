@@ -20,6 +20,7 @@ import {
   verifyInboundWebhook,
   extractEmailAddress,
   isSenderAllowed,
+  classifyRecipients,
   type InboundEmailData,
 } from '@/lib/inbound/email-webhook'
 
@@ -64,6 +65,46 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const { data } = verification.payload
 
+  // Route by recipient. The webhook URL receives mail for every parasol.co.ke
+  // address (including the root domain Tim uses for human inboxes). Only
+  // ask.parasol.co.ke triggers the contract intake pipeline.
+  const classification = classifyRecipients(data.to)
+  if (classification.kind === 'human_root') {
+    // Human-addressed mail — out of v1 scope. Acknowledge and drop so Resend
+    // doesn't retry. Sentry / observability captures these via console.info.
+    console.info('inbound.ignored.human_root', {
+      message_id: data.message_id,
+      recipient_count: classification.recipients.length,
+    })
+    return NextResponse.json(
+      { ignored: true, reason: 'human_addressed_root_domain' },
+      { status: 200 },
+    )
+  }
+  if (classification.kind === 'unexpected') {
+    // Subdomain we don't recognise — possible misconfiguration or probe.
+    // Warn so it surfaces in dashboards.
+    console.warn('inbound.unexpected_subdomain', {
+      message_id: data.message_id,
+      recipient_domains: classification.recipients
+        .map((r) => extractEmailAddress(r)?.split('@')[1])
+        .filter((d): d is string => !!d),
+    })
+    return NextResponse.json(
+      { ignored: true, reason: 'unexpected_subdomain' },
+      { status: 200 },
+    )
+  }
+  if (classification.kind === 'foreign') {
+    // No parasol.co.ke recipients — shouldn't happen via Resend forwarding.
+    console.warn('inbound.foreign_recipients', { message_id: data.message_id })
+    return NextResponse.json(
+      { ignored: true, reason: 'no_parasol_recipient' },
+      { status: 200 },
+    )
+  }
+
+  // classification.kind === 'intake' — proceed with the contract pipeline.
   const senderAddress = extractEmailAddress(data.from)
   if (!senderAddress) {
     return NextResponse.json({ error: 'unparseable_sender' }, { status: 400 })
@@ -71,7 +112,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   // Resolve workspace. Sprint 1 fallback: the single shared dev workspace.
   // Once DEF-002 lands and per-workspace subdomains route through the wildcard
-  // MX, parse the slug from the recipient address and look it up.
+  // MX, parse the slug from `classification.intakeRecipient` and look it up.
   const supabase = adminClient()
   const { data: workspace, error: wsErr } = await supabase
     .from('workspaces')

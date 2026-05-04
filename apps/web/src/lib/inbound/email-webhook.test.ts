@@ -6,6 +6,9 @@ import {
   extractDomain,
   isSenderAllowed,
   inboundEmailPayloadSchema,
+  classifyRecipients,
+  isAtIntakeSubdomain,
+  isAtParasolDomain,
 } from './email-webhook.js'
 
 // A real Svix-format secret. Must be base64-encoded random bytes; Svix's
@@ -180,5 +183,94 @@ describe('isSenderAllowed', () => {
   })
   it('returns false when sender email lacks @', () => {
     expect(isSenderAllowed('not-an-email', ['example.com'])).toBe(false)
+  })
+})
+
+// ─── Recipient classification ───────────────────────────────────────────────
+
+describe('isAtIntakeSubdomain', () => {
+  it('matches addresses at ask.parasol.co.ke', () => {
+    expect(isAtIntakeSubdomain('hello@ask.parasol.co.ke')).toBe(true)
+    expect(isAtIntakeSubdomain('Counterparty <legal@ask.parasol.co.ke>')).toBe(true)
+  })
+  it('is case-insensitive on the domain', () => {
+    expect(isAtIntakeSubdomain('hello@ASK.PARASOL.CO.KE')).toBe(true)
+  })
+  it('does not match the root parasol.co.ke', () => {
+    expect(isAtIntakeSubdomain('tim@parasol.co.ke')).toBe(false)
+  })
+  it('does not match other subdomains', () => {
+    expect(isAtIntakeSubdomain('hello@app.parasol.co.ke')).toBe(false)
+    expect(isAtIntakeSubdomain('hello@billing.parasol.co.ke')).toBe(false)
+  })
+  it('does not match unrelated domains that contain the substring', () => {
+    expect(isAtIntakeSubdomain('a@notask.parasol.co.ke')).toBe(false)
+  })
+})
+
+describe('isAtParasolDomain', () => {
+  it('matches root and any subdomain', () => {
+    expect(isAtParasolDomain('a@parasol.co.ke')).toBe(true)
+    expect(isAtParasolDomain('a@ask.parasol.co.ke')).toBe(true)
+    expect(isAtParasolDomain('a@anything.parasol.co.ke')).toBe(true)
+  })
+  it('does not match unrelated domains', () => {
+    expect(isAtParasolDomain('a@parasol.com')).toBe(false)
+    expect(isAtParasolDomain('a@notparasol.co.ke')).toBe(false)
+  })
+})
+
+describe('classifyRecipients', () => {
+  it('classifies a single ask.parasol.co.ke recipient as intake', () => {
+    const r = classifyRecipients(['hello@ask.parasol.co.ke'])
+    expect(r.kind).toBe('intake')
+    if (r.kind === 'intake') expect(r.intakeRecipient).toBe('hello@ask.parasol.co.ke')
+  })
+
+  it('classifies root parasol.co.ke recipients as human_root', () => {
+    const r = classifyRecipients(['tim@parasol.co.ke', 'hello@parasol.co.ke'])
+    expect(r.kind).toBe('human_root')
+  })
+
+  it('classifies unknown subdomains as unexpected', () => {
+    const r = classifyRecipients(['x@billing.parasol.co.ke'])
+    expect(r.kind).toBe('unexpected')
+    if (r.kind === 'unexpected') {
+      expect(r.recipients).toContain('x@billing.parasol.co.ke')
+    }
+  })
+
+  it('classifies non-parasol-domain recipients as foreign', () => {
+    const r = classifyRecipients(['a@example.com'])
+    expect(r.kind).toBe('foreign')
+  })
+
+  it('intake wins when mixed with human_root recipients', () => {
+    // A counterparty cc-ing ask@... and tim@... still triggers intake.
+    const r = classifyRecipients(['hello@ask.parasol.co.ke', 'tim@parasol.co.ke'])
+    expect(r.kind).toBe('intake')
+  })
+
+  it('intake wins when mixed with unexpected subdomain recipients', () => {
+    const r = classifyRecipients(['hello@ask.parasol.co.ke', 'x@billing.parasol.co.ke'])
+    expect(r.kind).toBe('intake')
+  })
+
+  it('unexpected wins over human_root when both present and no intake', () => {
+    const r = classifyRecipients(['x@billing.parasol.co.ke', 'tim@parasol.co.ke'])
+    expect(r.kind).toBe('unexpected')
+    // Only the subdomained recipient lands in `recipients` for warning logs
+    if (r.kind === 'unexpected') {
+      expect(r.recipients).toEqual(['x@billing.parasol.co.ke'])
+    }
+  })
+
+  it('handles Name <addr> form recipients', () => {
+    const r = classifyRecipients(['"Parasol Intake" <hello@ask.parasol.co.ke>'])
+    expect(r.kind).toBe('intake')
+  })
+
+  it('returns foreign for an empty to array', () => {
+    expect(classifyRecipients([]).kind).toBe('foreign')
   })
 })
