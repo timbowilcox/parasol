@@ -1,0 +1,38 @@
+# Common Paper Mutual NDA (template, US-Delaware default).
+# Edge case: this PDF is a 2-page cover that references the standard terms
+# at a URL rather than embedding them in the file. The pipeline should
+# either flag the missing-substantive-text condition or attempt to fetch
+# the linked terms. Sprint 1 expectation: flag as a structural anomaly.
+
+filename: nda-009.pdf
+annotated_at: 2026-05-04
+annotated_by: "parasol-internal-draft"
+notes: |
+  Common Paper template; cover-page-only NDA referencing online standard
+  terms. Annotation captures the "this NDA is unusual" expectation rather
+  than per-clause flags. Useful for testing the pipeline's robustness on
+  structurally non-standard inputs.
+
+expected_issues:
+  - clause_id: governing_law
+    severity: critical
+    description: "Delaware-governed default; outside Kenya playbook hard-limit set."
+    required: true
+    expected_confidence: high
+  - clause_id: dispute_resolution
+    severity: critical
+    description: "Delaware courts default; playbook standard is NCIA arbitration."
+    required: true
+    expected_confidence: high
+  - clause_id: data_protection
+    severity: critical
+    description: "Generic US template; no DPA 2019 processor obligations or cross-border transfer mechanism."
+    required: true
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "2013/26"

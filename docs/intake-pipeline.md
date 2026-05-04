@@ -58,6 +58,58 @@ For each input: detect file type and source. .docx with extractable text → mam
 - Routes through main pipeline
 - Reply email assembled and sent within 90 seconds (target)
 
+## Resend webhook architecture (important)
+
+Resend webhooks are **global, not per-domain**. There is no domain-scoped webhook configuration in Resend's product. A single webhook at `https://parasol.co.ke/api/inbound/email` receives `email.received` events for *every* domain on the Resend account — `parasol.co.ke`, `ask.parasol.co.ke`, and any future subdomains.
+
+The handler is responsible for routing based on the recipient address in the payload, not Resend's config.
+
+### Routing rules in the handler
+
+```ts
+// apps/web/src/app/api/inbound/email/route.ts
+export async function POST(request: Request) {
+  const payload = await verifyAndParseWebhook(request);
+  const recipient = payload.to.toLowerCase();
+
+  // 1. Customer contract intake — the Sprint 1 critical path
+  if (recipient.endsWith('@ask.parasol.co.ke')) {
+    return handleContractIntake(payload);
+  }
+
+  // 2. Per-workspace contract intake — Sprint 3+, DEF-002 wildcard MX
+  //    Pattern: ask@<workspace-slug>.parasol.co.ke
+  const workspaceMatch = recipient.match(/^ask@([a-z0-9-]+)\.parasol\.co\.ke$/);
+  if (workspaceMatch) {
+    return handleContractIntake(payload, { workspaceSlug: workspaceMatch[1] });
+  }
+
+  // 3. Human-addressed mail to the apex domain (hello@, support@, info@)
+  //    Out of scope for v1 contract pipeline — log and forward to team inbox
+  if (recipient.endsWith('@parasol.co.ke')) {
+    return handleHumanMail(payload);
+  }
+
+  // 4. Anything else is unexpected — log a warning, return 200 to avoid retries
+  logger.warn('inbound.unexpected_recipient', { recipient });
+  return new Response('ok', { status: 200 });
+}
+```
+
+### Why the handler returns 200 even on unexpected mail
+
+Resend retries non-2xx responses for ~24 hours. A 4xx or 5xx response on unexpected-but-harmless mail (an autoresponder bounce, a misdelivered message, a forwarded spam) just creates noise in Resend's webhook log without changing outcomes. Log the event for forensics, return 200, move on. Real failures (signature verification fails, payload malformed) *should* return 4xx so Resend retries — but only those.
+
+### Signature verification
+
+Every inbound webhook MUST verify the `Svix-Signature` header against `RESEND_WEBHOOK_SECRET` before doing anything with the payload. Unverified payloads are dropped with a 401. This is non-negotiable: without verification, anyone who guesses the URL can submit fake "customer contracts" to the pipeline.
+
+The Svix signature scheme is documented at https://docs.svix.com/receiving/verifying-payloads/how. Resend uses Svix under the hood; the `svix` npm package handles verification.
+
+### Outbound delivery telemetry — deferred
+
+The Sprint 1 inbound webhook subscribes to `email.received` only. Outbound delivery events (`email.bounced`, `email.delivery_delayed`, `email.complained`) are valuable for operational observability — knowing when a customer's response email failed to deliver — but are not Sprint 1 critical. Tracked as DEF-043 (subscribe to outbound delivery events with a separate `/api/outbound/events` handler).
+
 ## Quality assessment stage
 
 Implemented as Haiku stage `packages/ai/src/stages/quality-assess.ts`. Per-page output:

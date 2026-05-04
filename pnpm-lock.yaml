@@ -183,6 +183,12 @@ importers:
       '@parasol/playbooks':
         specifier: workspace:*
         version: link:../playbooks
+      '@supabase/supabase-js':
+        specifier: ^2.45.0
+        version: 2.105.1
+      yaml:
+        specifier: ^2.5.0
+        version: 2.8.4
       zod:
         specifier: ^3.23.8
         version: 3.25.76

@@ -1,0 +1,42 @@
+# Britam Kenya supplier NDA (one-way, kenya).
+# Most representative of the Kenya ICP — what a local in-house counsel
+# actually receives. Annotation reflects an expert's first-pass triage
+# against the kenya/nda.yaml playbook (status: draft, pre-counsel review).
+
+filename: nda-013.pdf
+annotated_at: 2026-05-04
+annotated_by: "parasol-internal-draft"
+notes: |
+  Real Kenyan-jurisdiction NDA. Governing law and dispute resolution should
+  align with Kenya playbook (no critical jurisdiction flags expected).
+  Likely material gaps: explicit DPA 2019 references, return/destruction
+  timing specificity, and electronic-signature acceptance under KICA.
+
+expected_issues:
+  - clause_id: data_protection
+    severity: critical
+    description: "Britam supplier NDAs typically pre-date DPA 2019; expect missing or thin processor-obligation language and absent cross-border transfer mechanism."
+    required: true
+    expected_confidence: high
+  - clause_id: confidentiality_term
+    severity: material
+    description: "Default Kenyan supplier NDA term is often unspecified or open-ended; playbook standard is 3 years."
+    expected_confidence: medium
+  - clause_id: return_or_destruction
+    severity: material
+    description: "Return/destruction language usually present but timing window often longer than playbook standard 30 days."
+    expected_confidence: medium
+  - clause_id: counterparts_and_execution
+    severity: minor
+    description: "Likely missing express electronic-signature reference under KICA 1998."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.42"
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "1998/2"

@@ -1,0 +1,168 @@
+{
+  "ran_at": "2026-05-04T07:49:09.259Z",
+  "git_sha": "64f3fa33fb2577c45cb21715a3041ad84855d29d",
+  "sprint": "sprint-1",
+  "pipeline": "stub",
+  "models": {},
+  "per_nda": [
+    {
+      "filename": "nda-001.pdf",
+      "clause_identification_precision": 1,
+      "clause_identification_recall": 1,
+      "clause_identification_f1": 1,
+      "citation_validity_rate": 1,
+      "hallucination_rate": 0,
+      "diagnostics": {
+        "matched_issues": [
+          {
+            "clause_id": "governing_law",
+            "severity": "critical"
+          },
+          {
+            "clause_id": "dispute_resolution",
+            "severity": "critical"
+          },
+          {
+            "clause_id": "data_protection",
+            "severity": "critical"
+          },
+          {
+            "clause_id": "remedies",
+            "severity": "material"
+          },
+          {
+            "clause_id": "confidentiality_term",
+            "severity": "minor"
+          }
+        ],
+        "extra_issues": [],
+        "missed_issues": [],
+        "invalid_citations": []
+      }
+    },
+    {
+      "filename": "nda-009.pdf",
+      "clause_identification_precision": 1,
+      "clause_identification_recall": 1,
+      "clause_identification_f1": 1,
+      "citation_validity_rate": 1,
+      "hallucination_rate": 0,
+      "diagnostics": {
+        "matched_issues": [
+          {
+            "clause_id": "governing_law",
+            "severity": "critical"
+          },
+          {
+            "clause_id": "dispute_resolution",
+            "severity": "critical"
+          },
+          {
+            "clause_id": "data_protection",
+            "severity": "critical"
+          }
+        ],
+        "extra_issues": [],
+        "missed_issues": [],
+        "invalid_citations": []
+      }
+    },
+    {
+      "filename": "nda-010.pdf",
+      "clause_identification_precision": 1,
+      "clause_identification_recall": 1,
+      "clause_identification_f1": 1,
+      "citation_validity_rate": 1,
+      "hallucination_rate": 0,
+      "diagnostics": {
+        "matched_issues": [
+          {
+            "clause_id": "dispute_resolution",
+            "severity": "material"
+          },
+          {
+            "clause_id": "data_protection",
+            "severity": "material"
+          },
+          {
+            "clause_id": "confidentiality_term",
+            "severity": "minor"
+          }
+        ],
+        "extra_issues": [],
+        "missed_issues": [],
+        "invalid_citations": []
+      }
+    },
+    {
+      "filename": "nda-013.pdf",
+      "clause_identification_precision": 1,
+      "clause_identification_recall": 1,
+      "clause_identification_f1": 1,
+      "citation_validity_rate": 1,
+      "hallucination_rate": 0,
+      "diagnostics": {
+        "matched_issues": [
+          {
+            "clause_id": "data_protection",
+            "severity": "critical"
+          },
+          {
+            "clause_id": "confidentiality_term",
+            "severity": "material"
+          },
+          {
+            "clause_id": "return_or_destruction",
+            "severity": "material"
+          },
+          {
+            "clause_id": "counterparts_and_execution",
+            "severity": "minor"
+          }
+        ],
+        "extra_issues": [],
+        "missed_issues": [],
+        "invalid_citations": []
+      }
+    },
+    {
+      "filename": "nda-015.docx",
+      "clause_identification_precision": 1,
+      "clause_identification_recall": 1,
+      "clause_identification_f1": 1,
+      "citation_validity_rate": 1,
+      "hallucination_rate": 0,
+      "diagnostics": {
+        "matched_issues": [
+          {
+            "clause_id": "governing_law",
+            "severity": "critical"
+          },
+          {
+            "clause_id": "dispute_resolution",
+            "severity": "critical"
+          },
+          {
+            "clause_id": "data_protection",
+            "severity": "critical"
+          },
+          {
+            "clause_id": "counterparts_and_execution",
+            "severity": "minor"
+          }
+        ],
+        "extra_issues": [],
+        "missed_issues": [],
+        "invalid_citations": []
+      }
+    }
+  ],
+  "aggregate": {
+    "cases": 5,
+    "clause_identification_precision": 1,
+    "clause_identification_recall": 1,
+    "clause_identification_f1": 1,
+    "citation_validity_rate": 1,
+    "hallucination_rate": 0
+  }
+}

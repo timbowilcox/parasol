@@ -33,13 +33,6 @@ If a deferred item is completed, move it to the **Completed** section at the bot
 
 ### Third-party account configuration
 
-#### DEF-001: Resend — enable inbound email reception on ask.parasol.co.ke
-- **Trigger**: `sprint:1 day 5`
-- **What**: Toggle "Enable Receiving" in Resend's UI for the parasol.co.ke domain. Add the inbound MX record Resend provides — placed on the `ask` subdomain at 101domain (Name: `ask`, Type: MX, Value as Resend specifies). Confirm webhook URL in Resend's webhook config matches the deployed Vercel endpoint at `https://app.parasol.co.ke/api/inbound/email`.
-- **Why deferred**: Inbound configuration depends on the route handler at `apps/web/src/app/api/inbound/email/route.ts` actually existing and being deployed. Sprint 1 day 5 is when that endpoint becomes real.
-- **Whose action**: Tim (Resend UI + 101domain DNS), Claude Code (route handler implementation)
-- **Notes**: Webhook is already created in Resend pointing at the placeholder URL. Signing secret is already in `.env.local` as `RESEND_INBOUND_WEBHOOK_SECRET`. The remaining steps are toggling receiving on, adding the MX record, and verifying.
-
 #### DEF-002: Resend — wildcard MX for workspace-prefixed addresses
 - **Trigger**: `sprint:3` (workspace creation sprint)
 - **What**: Configure `*.parasol.co.ke` wildcard MX in 101domain so that addresses like `ask@<workspace-slug>.parasol.co.ke` route correctly through Resend inbound. Verify with a test workspace before Sprint 3 closes. Note: root `parasol.co.ke` MX must remain pointed at Tim's primary email service (Microsoft 365 / Google Workspace) so normal mailboxes like `tim@parasol.co.ke` continue to work.
@@ -59,24 +52,10 @@ If a deferred item is completed, move it to the **Completed** section at the bot
 - **Whose action**: Tim (manual check). Add to release runbook.
 - **Claude Code role**: Block production release until Tim confirms.
 
-#### DEF-005: Voyage AI — add payment method to lift free-tier rate limits
-- **Trigger**: `sprint:1 day 4` (escalated from day 8 — confirmed blocking on day 4)
-- **What**: Tim's Voyage account has no payment method, so it's on the free tier with hard caps of **3 requests per minute** and **10K tokens per minute** for embeddings. The Sprint 1 day-4 corpus ingest smoke test hit a 429 on the very first batch (the Constitution alone produces 158 chunks ≈ 80K tokens, far above 10K TPM). Add a payment method at https://dashboard.voyageai.com/ to unlock standard limits — the 200M free-token quota still applies after adding a card, so the immediate marginal cost is $0. Then re-run `pnpm --filter @parasol/corpus run ingest:kenya` (no flags) to populate corpus_chunks with embeddings, after which the day-4 acceptance test (DPA s.49 in top 3 retrievals) can run.
-- **Why escalated**: Without embeddings, dense retrieval returns nothing and `retrieveAuthority` falls back to BM25-only — which is workable for keyword queries but fails the day-4 acceptance criterion that explicitly tests semantic retrieval.
-- **Workaround if Tim cannot add a card immediately**: Pass `--skip-embedding` to ingest. Chunks land with `embedding = null`, BM25 still indexes them via the generated `fts` column, and BM25-only retrieval works. The acceptance bar is not met but the rest of Sprint 1 can proceed.
-- **Whose action**: Tim (add card on Voyage dashboard); Claude Code (re-run ingest, run acceptance test)
-- **Original Day 8 task** (still relevant): once embeddings are flowing, calculate projected v1-launch usage from eval logs and decide if the standard plan is sufficient or if Sprint 7 needs a paid tier upgrade.
-
 #### DEF-006: Stripe — activate live account and configure tax handling
 - **Trigger**: `sprint:3 day 1`
 - **What**: Sandbox keys retrieved (stored in Tim's password manager). Sprint 3: complete Stripe live activation for Parasol Inc (Delaware); configure US tax compliance via Stripe Tax for Delaware; configure Kenya VAT collection on cross-border digital services (1.5% DST per Kenya Finance Act); set USD as primary currency; configure invoice templates with Parasol Inc as merchant of record. Wire sandbox keys for Sprint 3 development; switch to live keys at Sprint 8 launch.
 - **Whose action**: Tim (Stripe dashboard + Delaware business documents)
-
-#### DEF-008: Sentry — configure PII scrubbing
-- **Trigger**: `sprint:1 day 1`
-- **What**: Sentry account already exists; configure `beforeSend` hook in `apps/web/sentry.config.ts` to scrub email addresses, document content, and any field marked sensitive. Test with a deliberate test error containing fake PII.
-- **Why deferred**: Sentry can't be added safely without scrubbing; scrubbing config is part of initial setup.
-- **Whose action**: Claude Code (implement during Sprint 1)
 
 #### DEF-009: Supabase — Row-Level Security policies on every table
 - **Trigger**: each migration that adds a new table (continuous)
@@ -177,6 +156,13 @@ Path A architecture means Parasol is a US-incorporated SaaS selling cross-border
 - **What**: Review docs/data-residency.md sub-processor list. Verify each is still in use, still ZDR-configured (where applicable), still in their stated region. Update list and re-publish.
 - **Whose action**: Claude Code + Tim
 
+#### DEF-043: Outbound delivery telemetry — bounce / complaint / delay events
+- **Trigger**: `sprint:2` or `sprint:3` (during billing/email-flows hardening)
+- **What**: Add a second Resend webhook subscribed to `email.bounced`, `email.delivery_delayed`, `email.complained` events, posting to a new handler at `/api/outbound/events`. Persists each event to a `delivery_events` table linked to the originating `reviews.id` where applicable. Surfaces failed deliveries in the workspace activity feed and triggers retry-or-alert logic per event type.
+- **Why deferred**: Sprint 1 critical path is inbound (`email.received`). Outbound responses use Resend's send API which returns delivery success synchronously enough for v1 — operational visibility into post-send failures is hardening, not core flow. A customer's response email silently failing is bad but not Sprint 1 blocking.
+- **Why it matters when picked up**: Without this, an outbound response that bounces or gets marked as spam disappears from operator visibility. The customer assumes Parasol ignored them. Long-term reputation risk on Resend's sending IPs if complaint rate goes uncaught.
+- **Whose action**: Claude Code (handler + table + activity feed wiring); Tim (configure the second webhook in Resend → Webhooks once handler ships)
+
 ### Product hardening
 
 #### DEF-026: Eval acceptance bar tightening at v1 launch
@@ -270,26 +256,6 @@ Path A architecture means Parasol is a US-incorporated SaaS selling cross-border
 - **Whose action**: Claude Code (run A/B, produce eval delta report); Tim (final adoption decision if metrics are mixed)
 - **Cost impact if adopted**: per-review cost rises from ~$0.20 to ~$0.60. At v1-launch volume (~1,500 reviews/month) that's a ~$600/month delta — meaningful but trivial against revenue. v1 launch bars (F1 ≥0.88, redline ≥4.2, hallucination <1%) may be unreachable on Sonnet alone, in which case Opus adoption becomes a launch blocker rather than an optimisation.
 
-### Engineering hygiene
-
-#### DEF-043: Auto-generate Database TypeScript types from Supabase schema
-- **Trigger**: `condition:supabase-PAT-or-docker-available`
-- **What**: Today `packages/core/src/db.ts` is hand-rolled to mirror the migrations because `supabase gen types typescript --db-url` requires Docker (for postgres-meta) and `--project-id` requires a Supabase Personal Access Token, neither of which is present locally. As a consequence, every new migration requires a manual edit to `db.ts`. Switch to auto-generation as soon as one of: (a) Tim creates a Supabase PAT and stores it as `SUPABASE_ACCESS_TOKEN` in `.env.local`; or (b) Docker Desktop is installed. Wire the existing `pnpm db:types` script (already in `apps/web/package.json`), redirect output to `packages/core/src/db.ts`, and replace the hand-rolled type. Add a CI check that fails if migrations changed but `db.ts` is stale.
-- **Why deferred**: Hand-rolling the type for 4 tables is faster than installing Docker mid-Sprint-1 and avoids creating an account dependency. Once the PAT exists this is a 10-minute swap.
-- **Whose action**: Tim (provide PAT or install Docker); Claude Code (swap the file + add CI check)
-
-#### DEF-044: Atomic audit log append via Postgres RPC
-- **Trigger**: `sprint:5` OR `condition:concurrent-audit-write-detected`
-- **What**: `AuditRepository.appendEvent` currently uses a read-then-write pattern (read latest hash, compute new hash, insert). Two concurrent appends to the same workspace can race and produce two rows with the same `previous_hash`, breaking strict chain integrity. Add a new migration that defines `public.append_audit_event(...)` as a `security definer` plpgsql function which `SELECT ... FOR UPDATE`s the latest row inside a transaction, computes the hash server-side using `pgcrypto.digest`, and inserts atomically. Update `AuditRepository.appendEvent` to call the RPC instead of doing the read-then-write in the app layer. Keep `computeChainHash` and `verifyChain` in TypeScript for offline verification.
-- **Why deferred**: Sprint 1 audit volume is low (one event per review create + complete + admin action). Race conditions are extremely unlikely. Sprint 5 ships the audit log UI and that's when chain integrity needs to be bulletproof for the customer-facing surface.
-- **Whose action**: Claude Code
-
-#### DEF-045: Voyage embedder — adaptive batching with 429-aware retry
-- **Trigger**: `sprint:6 day 1` OR `condition:running-full-eval-on-shared-account`
-- **What**: `packages/corpus/src/embedder.ts` currently sends the full configured `batchSize` (default 128) without any rate-limit awareness. On Voyage's free tier this 429s instantly; on the paid tier it can still spike. Add: (a) a configurable `inter-batch-delay-ms` option, (b) automatic retry-with-exponential-backoff on 429 responses (read `retry-after` header if present), (c) auto-reduce batch size on repeated 429s within a single run. Wire equivalent flags to the ingest CLI (`--batch-size`, `--inter-batch-delay-ms`). Same shape will apply to the rerank call once Day 4's retrieval is exercised heavily by the eval suite.
-- **Why deferred**: Sprint 1 day-4 smoke test surfaced the limit but didn't need to fix it inline — the right fix is Tim adding a payment method (DEF-005). Adaptive batching is real engineering value once we're running the eval suite (Day 6+) and don't want a single 429 to fail a 200-document run.
-- **Whose action**: Claude Code
-
 ### Payments
 
 #### DEF-042: Sprint 7 — evaluate M-PESA acceptance options
@@ -304,7 +270,9 @@ Path A architecture means Parasol is a US-incorporated SaaS selling cross-border
 
 (Move items here when done. Format: `DEF-NNN: title — completed YYYY-MM-DD by [Tim/Claude Code], notes if any`)
 
-(none yet)
+- **DEF-001**: Resend — enable inbound email reception on ask.parasol.co.ke — completed 2026-05-04 by Tim. MX record added at 101domain, domain verified in Resend. Webhook at `/api/inbound/email` is wired (handler classifies by recipient subdomain — intake / human-root / unexpected). End-to-end forward-an-email test queued for the day a deployed Vercel preview exists; until then the handler is exercised by unit tests only.
+- **DEF-005**: Voyage AI — add payment method to lift free-tier rate limits — completed 2026-05-04 by Tim. Standard rate limits now apply; 200M-token free quota still in effect. Sprint 1 fixture corpus (six Kenya statutes, ~1,116 chunks) embedded successfully. The original Day-8 task ("calculate projected v1-launch usage from eval logs") remains relevant once Day 6+ eval-harness produces logs.
+- **DEF-008**: Sentry — configure PII scrubbing — completed 2026-05-03 by Claude Code (Sprint 1 Day 1). `apps/web/src/lib/pii-scrub.ts` is the framework-agnostic scrubber wired into `sentry.{client,server}.config.ts` via `beforeSend`. Activates automatically once `SENTRY_DSN` is set in `.env.local` / Vercel.
 
 ---
 

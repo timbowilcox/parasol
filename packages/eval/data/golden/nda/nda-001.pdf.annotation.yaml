@@ -1,0 +1,50 @@
+# Calpine Corp / LS Power M&A confidentiality agreement (mutual, US, signed).
+# Typical inbound signed NDA — what a Kenyan ICP customer would receive
+# from a US counterparty. Heavy critical-flag profile because the contract
+# was drafted under US law, not Kenyan.
+
+filename: nda-001.pdf
+annotated_at: 2026-05-04
+annotated_by: "parasol-internal-draft"
+notes: |
+  US M&A confidentiality agreement, Delaware-governed. Multiple critical
+  jurisdiction conflicts with the Kenya playbook hard limits. Useful as a
+  worst-case test for the redline pipeline.
+
+expected_issues:
+  - clause_id: governing_law
+    severity: critical
+    description: "Delaware-governed; Kenya playbook hard-limit jurisdictions are Kenya/UK/Singapore/Mauritius/NY only."
+    required: true
+    expected_confidence: high
+  - clause_id: dispute_resolution
+    severity: critical
+    description: "Disputes routed to Delaware courts; playbook standard is NCIA arbitration with Nairobi seat."
+    required: true
+    expected_confidence: high
+  - clause_id: data_protection
+    severity: critical
+    description: "No DPA 2019 processor obligations; cross-border transfer language absent."
+    required: true
+    expected_confidence: high
+  - clause_id: remedies
+    severity: material
+    description: "Injunctive-relief language present but bond requirement may exceed Kenyan civil procedure norms."
+    expected_confidence: medium
+  - clause_id: confidentiality_term
+    severity: minor
+    description: "M&A standard is often 2-year term; playbook standard is 3 years but fallback covers 2."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.42"
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "2013/26"
+  - source: kenya-statute
+    id: "1995/4"
+    section: "s.36"

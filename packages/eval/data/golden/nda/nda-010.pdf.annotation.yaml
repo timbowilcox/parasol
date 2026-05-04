@@ -1,0 +1,34 @@
+# gov.uk example mutual NDA (template, UK).
+# Clean UK structure — closer to playbook standard than US M&A NDAs but
+# still requires jurisdiction adjustment for Kenyan-counterparty use.
+
+filename: nda-010.pdf
+annotated_at: 2026-05-04
+annotated_by: "parasol-internal-draft"
+notes: |
+  UK gov template. Governing law is England & Wales — falls within Kenya
+  playbook fallback (and within hard-limit set), so governing-law flag is
+  material rather than critical. Dispute resolution language likely
+  English courts rather than arbitration; playbook fallback accepts LCIA
+  arbitration.
+
+expected_issues:
+  - clause_id: dispute_resolution
+    severity: material
+    description: "English court jurisdiction; playbook fallback is LCIA arbitration with London or Nairobi seat."
+    expected_confidence: medium
+  - clause_id: data_protection
+    severity: material
+    description: "Likely UK GDPR-aware but not Kenya DPA 2019-aware; cross-border transfer mechanism may need adjustment."
+    expected_confidence: medium
+  - clause_id: confidentiality_term
+    severity: minor
+    description: "UK templates commonly use 5-year term; playbook standard is 3, fallback is 2."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "2013/26"

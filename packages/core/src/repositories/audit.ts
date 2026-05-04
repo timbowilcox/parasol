@@ -69,9 +69,9 @@ export class AuditRepository extends BaseRepository {
   // Two concurrent appendEvent calls for the same workspace can produce two
   // rows that both reference the same previous_hash, breaking strict chain
   // integrity. Acceptable for Sprint 1 (audit volume is low: review create /
-  // complete + admin actions). Sprint 5 (audit log UI, DEF-044) will add a
-  // Postgres `append_audit_event` RPC that does SELECT...FOR UPDATE inside a
-  // transaction to make appends atomic per workspace.
+  // complete + admin actions). The audit-log UI sprint will replace this
+  // with a Postgres `append_audit_event` RPC that does SELECT...FOR UPDATE
+  // inside a transaction to make appends atomic per workspace.
   async appendEvent(input: AppendEventInput): Promise<AuditLog> {
     const id = crypto.randomUUID()
     const previousHash = await this.getLatestHash(input.workspaceId)

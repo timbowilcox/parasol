@@ -2,7 +2,7 @@
 // Regenerate via `pnpm db:types` once a Supabase Personal Access Token is
 // configured (or once Docker Desktop is available for the local meta path).
 // Until then, this file is the canonical source — keep it in sync with new
-// migrations. See DEFERRED entry DEF-043 for proper auto-generation.
+// migrations.
 //
 // IMPORTANT: per-table Row/Insert/Update are declared as `type` aliases, not
 // `interface`. Supabase's GenericTable constraint requires structural

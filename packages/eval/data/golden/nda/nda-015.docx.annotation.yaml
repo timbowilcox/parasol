@@ -1,0 +1,41 @@
+# Common Paper Mutual NDA — DOCX form (template, US-Delaware default).
+# Same legal substance as nda-009.pdf but as DOCX — exercises the .docx
+# extraction code path of the intake pipeline (mammoth or equivalent).
+
+filename: nda-015.docx
+annotated_at: 2026-05-04
+annotated_by: "parasol-internal-draft"
+notes: |
+  Editable DOCX form of the Common Paper Mutual NDA. Same substantive
+  expectations as nda-009.pdf; this annotation exists to verify the
+  pipeline behaves identically on PDF vs DOCX inputs of the same NDA.
+
+expected_issues:
+  - clause_id: governing_law
+    severity: critical
+    description: "Delaware-governed default; outside Kenya playbook hard-limit set."
+    required: true
+    expected_confidence: high
+  - clause_id: dispute_resolution
+    severity: critical
+    description: "Delaware courts default; playbook standard is NCIA arbitration."
+    required: true
+    expected_confidence: high
+  - clause_id: data_protection
+    severity: critical
+    description: "Generic US template; no DPA 2019 processor obligations or cross-border transfer mechanism."
+    required: true
+    expected_confidence: medium
+  - clause_id: counterparts_and_execution
+    severity: minor
+    description: "DOCX format suggests electronic execution intended; playbook expects KICA-aware language."
+    expected_confidence: medium
+
+expected_citations:
+  - source: kenya-statute
+    id: "2019/24"
+    section: "s.49"
+  - source: kenya-statute
+    id: "1998/2"
+  - source: kenya-statute
+    id: "2013/26"
