@@ -294,6 +294,18 @@ Path A architecture means Parasol is a US-incorporated SaaS selling cross-border
 
 ---
 
+## Sprint 1 close summary (2026-05-05)
+
+Sprint 1 carries into Sprint 2 the following items still tagged `sprint:1*`:
+- **DEF-011**: register .co.ug, .co.tz, .co.rw — Tim, not blocking; carry as standing item.
+- **DEF-028**: NDA playbook lawyer review — Tim engages counsel; production gate is v1 launch. Sprint 1 ships the playbook with `status: draft` flagged in the YAML and surfaced to the model in the cached system prefix.
+- **DEF-046**: native Word tracked-changes for redline DOCX — code path produces visible `[REDLINE — clauseId: ...]` markers; native tracked-changes is Day 12 polish slot or post-launch.
+- **DEF-047**: vision-degraded intake (rasterise scans + photographs) — Sprint 1 ships clean PDF/DOCX/text path; degraded inputs return an explainer reply.
+- **DEF-048**: migrate redline DOCX bytes from inline base64 to Supabase Storage — phase v1-launch-hardening.
+- **DEF-049**: SSE / RSC streaming for `/review/[id]` and `/admin/corpus` progress — phase v1-launch-hardening.
+
+The Sprint 1 production-pipeline measurement (live latency on 3 NDAs, first true F1) is gated on deployment + `pnpm db:migrate` on the dev project. Documented in Day 13 + Day 14 HANDOFFs.
+
 ## Completed
 
 (Move items here when done. Format: `DEF-NNN: title — completed YYYY-MM-DD by [Tim/Claude Code], notes if any`)

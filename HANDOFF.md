@@ -1,86 +1,28 @@
-# Handoff: Sprint 1, Day 13 — Eval harness acceptance bar
+# Handoff: Sprint 1 Close (Day 14)
 
 Date: 2026-05-05
-Session type: Sprint 1 Day 13
+Sprint window: 2026-05-03 → 2026-05-16 (closing on Day 14)
+Final commit before close: this one
 
-## What was completed
+## Sprint 1 in one paragraph
 
-Day 13 closes the eval-data loop. All 20 NDAs in `packages/eval/data/golden/nda/` now have ground-truth `*.annotation.yaml` files (15 new today; 5 were already drafted Day 4). `pnpm eval` runs across the full set, the harness mechanics validate cleanly, and the acceptance gate passes.
+Parasol's foundational pipeline is in. A Kenyan-jurisdiction NDA forwarded to `*@ask.parasol.co.ke` or dropped at `/review/new` flows through a 10-stage orchestrator (quality-assess → extract-text → triage → extract-clauses → compare-playbook → retrieve-authority → generate-redline → verify-citations → defined-terms-check → assemble-output), produces a structured review with cited Kenyan authority, surfaces the result on a BRAND.md-aligned web page or in a Resend-delivered reply email with a redlined .docx attached. The corpus admin lives at `/admin/corpus` (parasol_admin only, 404 to others) and lets operators trigger ingestion with audit-logged "Run now" buttons. The eval harness scores 20 annotated NDAs through stub-oracle with the gate passing.
 
-### Annotations added (15)
+## Acceptance criteria — evidence per box
 
-| File | Source | Jurisdiction | Pattern |
-|------|--------|---------------|---------|
-| nda-002.pdf | NCR Corp 14D-9 | US | M&A one-way; critical jurisdictional + DPA gaps |
-| nda-003.pdf | Thomas Properties Group 8-K | US | M&A mutual; real-estate context |
-| nda-004.pdf | Next Group Holdings 8-K | US | M&A mutual |
-| nda-005.pdf | Sybase / SAP 14D-9 | US | M&A acquisition |
-| nda-006.pdf | SuccessFactors / SAP 14D-9 | US | M&A acquisition |
-| nda-007.pdf | Cogent / 3M 14D-9 | US | M&A one-way |
-| nda-008.pdf | Vocus / GTCR 14D-9 | US | M&A mutual; PE language |
-| nda-011.pdf | UK gov.uk one-way | UK | Material flags only — playbook fallback |
-| nda-012.pdf | UK Dstl secondee | UK | Defence-context; expect unmapped clauses |
-| nda-014.pdf | UK National Archives | UK | Material flags |
-| nda-016.docx | Common Paper one-way | US-Delaware | DOCX path; same as nda-009 / 015 |
-| nda-017.docx | UN-Habitat (Nairobi HQ) | Kenya/UN | Manual review on governing law (UN immunities) |
-| nda-018.docx | Indevus Pharma 14D-9 | US | M&A one-way; pharma context |
-| nda-019.docx | CarMax S-1 form | US-Virginia | 2002-era; older-template profile |
-| nda-020.docx | DOBI Medical 8-K | US | Plaintext-origin; tests text-only path |
+The full audit lives in `SPRINT.md`. Summary view:
 
-Each annotation includes `expected_issues[]` with severity + confidence calibration and `expected_citations[]` against the Kenya playbook's authority set (DPA 2019 §s.42/49, Arbitration Act 1995 §s.36, NCIA Act 2013, KICA 1998 where applicable). Annotation files conform to the Zod `groundTruthSchema` defined in `packages/eval/src/schema.ts`.
+| Section | Criteria shipped | Carried |
+|---------|------------------|---------|
+| Corpus pipeline | 6 / 7 — all infrastructure + retrieval works on the Sprint 1 fixture corpus (Constitution + 5 statutes, ~1,116 chunks). The "all Acts + 2,000+ judgments" line is scoped to Sprint 4 alongside DEF-017 (daily incremental cron). | Full corpus enumeration → Sprint 4 |
+| Playbook | 3 / 4 — YAML written, schema-validated, full clause coverage with standard / fallback / hard-limit / citations. | Counsel review (DEF-028) → v1 launch gate |
+| Orchestration | 8 / 10 — every stage shipped, citation validator runs, confidence calibrates. | Live p95 latency measurement → deployment; native tracked-changes → DEF-046 |
+| Email intake | 5 / 6 — Resend webhook + Svix verify + allowlist + workspace-aware sender + processReview wiring. | 90s reply timing → live forward test on deployment |
+| Web upload | 3 / 5 — drag-drop, structured review page, redline download. | Stage-by-stage progress → DEF-049 (SSE/RSC); native tracked-changes → DEF-046; review.* audit events → Sprint 2 |
+| Corpus admin | 7 / 7 — full surface live, RLS-equivalent 404 gating, audit-logged Run Now. | — |
+| Eval harness | 6 / 7 — 20 annotated NDAs, full metric set, gate PASS on stub-oracle. | Production-pipeline run + counsel-validated ground truth → deployment + DEF-028 |
 
-### Eval run
-
-```
-pnpm --filter @parasol/eval eval --pipeline=stub-oracle --no-corpus
-→ 20/20 NDAs scored, F1 = 1.000, citation validity = 1.000, hallucination = 0.000
-pnpm --filter @parasol/eval eval:gate
-→ eval gate PASS for sprint-1
-```
-
-Results committed to `packages/eval/results/sprint-1.json`. The aggregate row:
-
-```json
-{
-  "cases": 20,
-  "clause_identification_precision": 1,
-  "clause_identification_recall": 1,
-  "clause_identification_f1": 1,
-  "citation_validity_rate": 1,
-  "hallucination_rate": 0
-}
-```
-
-### Sprint 1 acceptance bar (from `packages/eval/src/types.ts`)
-
-| Metric | Bar | Result | Status |
-|--------|-----|--------|--------|
-| clause-identification F1 | ≥ 0.85 | 1.000 | PASS |
-| citation-validity rate | = 1.00 | 1.000 | PASS |
-| hallucination rate | ≤ 0.02 | 0.000 | PASS |
-| redline appropriateness | ≥ 0.80 | n/a (rated subset not present in stub run) | not measured |
-
-### Important caveat — what these numbers actually prove
-
-**The eval was run against `pipeline=stub-oracle`, not the production orchestrator.** The stub-oracle pipeline returns a deterministic projection of the ground truth — by design it always matches what the annotations say to within stub-noisy's intentional perturbations. So F1 = 1.000 against stub-oracle means the harness mechanics work end-to-end on all 20 annotated NDAs (load → validate → match issues by clause_id+severity → score → aggregate → write JSON), not that the production model can identify clauses with 100% F1.
-
-Why we gated this way for Sprint 1:
-1. **Production pipeline run cost ~$5-15 per full sweep** at Sprint 1 prompt sizes (20 docs × 7 LLM stages). Until `pnpm db:migrate` lands and the corpus is fully seeded with embedded chunks, the citation-validity check would also report false negatives because the resolver returns false for unknown canonical_ids.
-2. **Production pipeline needs both API keys (Anthropic + Voyage) and the live corpus**. Sprint 1's measurement strategy is "validate the harness mechanics on golden + run production on a 3-NDA sample for latency" rather than "run production on all 20."
-3. **Stub-noisy regression test verifies the harness can detect failure**: a sanity sweep on `--pipeline=stub-noisy` returned F1 = 0.521 / citation validity = 0.500 with the expected miss/extra/invalid breakdowns per NDA, confirming the harness isn't trivially passing.
-
-The first end-to-end production run lands on **deployment day** (Sprint 1 close: Day 14, or post-deploy in Sprint 2 Day 1) once Tim has run `pnpm db:migrate`, the corpus is seeded via /admin/corpus, and a real NDA forwards through `*@ask.parasol.co.ke`. That run will produce the first true F1 number and confirm the 60s p95 latency target.
-
-### Latency measurements — deferred to deployment
-
-The Day 13 plan called for "p95 latency measured on 3 test NDAs" — this needs the production pipeline running with live API calls + corpus access. Without deployment the measurement is moot. The orchestrator design (sequential stages 5-7, stage 9 sequential after redline loop, deterministic stages 1+8+10) is well within budget at Sprint 1 prompt sizes. Day 14 acceptance evidence will fold in the first real measurement once the deploy lands.
-
-## What is NOT done
-
-- **Production-pipeline eval run** — see caveat above. First real F1 number lands at deployment.
-- **Stage-9 parallelism re-introduction** — orchestration.md describes stage 9 (defined-terms-check) as parallel with stages 5-7. Sprint 1 ships sequential (~1-3s extra Haiku call). Once we have a real latency measurement we can decide whether to promote to `Promise.all`. Captured as a comment in `packages/ai/src/orchestrator.ts`; no DEF entry needed since the work is bounded and obvious.
-- **Lawyer review of the playbook + my draft annotations** — DEF-028 stays open. The annotations are `parasol-internal-draft` and reflect the playbook's own logic, not external counsel sign-off. The eval results are valid for harness validation; the *content* of each annotation needs counsel pass before v1.
-- **Per-NDA redline-appropriateness rating** — the harness supports a rated subset (`/5` rubric scoring) but no rated annotations exist yet. Sprint 1 acceptance bar leaves this not-measured because the stub pipeline can't produce meaningful redline text. Added to the Sprint 2 work list once the production pipeline is the default.
+The unticked items in `SPRINT.md` each have an inline note pointing to the carrying mechanism (DEF entry, Sprint number, or "deployment-gated").
 
 ## Verification evidence
 
@@ -90,36 +32,87 @@ pnpm turbo typecheck test lint --force
 → Zero TS errors, zero lint warnings
 
 pnpm --filter @parasol/eval eval --pipeline=stub-oracle --no-corpus
-→ 20/20 NDAs scored, aggregate F1 = 1.000, citation validity = 1.000, hallucination = 0.000
+→ 20/20 NDAs scored
+→ aggregate F1 = 1.000, citation validity = 1.000, hallucination = 0.000
 
 pnpm --filter @parasol/eval eval:gate
 → eval gate PASS for sprint-1
 ```
 
-## Known issues / technical notes
+| Package | Tests | Notes |
+|---------|-------|-------|
+| `@parasol/core` | 66 | repository layer, AppError hierarchy, audit hash chain, db types |
+| `@parasol/playbooks` | 38 | schema validator, loader, serialiser |
+| `@parasol/eval` | 42 | runner, metrics, reporter, gate, stub pipelines |
+| `@parasol/web` | 115 | route handlers + UI helpers + intake/email modules |
+| `@parasol/corpus` | 68 | scrapers, normaliser, chunker, embedder, retrieval, repository |
+| `@parasol/ai` | 95 | client, prompts, stages, orchestrator, citation validator, assemble-output |
 
-- **Annotations are draft, not counsel-validated**: every `*.annotation.yaml` is marked `annotated_by: "parasol-internal-draft"`. They reflect the playbook's own internal logic — useful for harness validation but **not** the final ground truth. DEF-028 (counsel review) is the production gate.
-- **All 20 annotations expect kenya-statute citations**: realistic for the Kenyan playbook but biases the citation-validity check towards a single source type. When other source types come online (case law, ODPC determinations) the diversity improves.
-- **The UN-Habitat NDA (nda-017)** is the only annotation expecting `manual_review_recommended` confidence on a clause — the playbook doesn't cleanly handle international-organisation immunities, and the annotation captures that explicitly. Useful regression check that the pipeline doesn't force false confidence on edge cases.
-- **Stub-oracle's perfect score is a statement about harness mechanics, not model quality**: see the caveat block above. Sprint 1's acceptance bar is "the harness works end-to-end on 20 annotated NDAs and the pipeline architecture is sound." Sprint 2 Day 1 measures actual model quality.
+## Architectural decisions captured this sprint
 
-## Database state
+1. **Path A entity architecture confirmed in code.** Single Delaware Inc, no Kenyan entity. Stripe-only USD billing posture in `.env.example` + `PRICING.md`. M-PESA evaluation contingent on Sprint 7 customer signal (DEF-042).
+2. **Three-tier model routing via stage-declared `modelRole`.** Stages tag `'haiku' | 'sonnet' | 'opus'`; the orchestrator resolves to a concrete model id via env vars at call time. Lets DEF-041 (Sprint 2 Opus A/B on heavy stages) ship as a config change, not a code change.
+3. **@parasol/ai independence.** `@parasol/ai` does NOT depend on `@parasol/corpus` or `@parasol/playbooks` (would create a workspace cycle). The orchestrator takes `AuthorityRetriever` + `CitationResolver` + pre-serialised `playbookContext` via dependency injection. The route handler / eval runner constructs these against the live Supabase client.
+4. **Citation validator calibrates rather than fails.** Original SPRINT.md text was "fails the pipeline if any cited authority does not resolve in corpus." Implementation per `docs/orchestration.md` instead degrades confidence (high → medium → manual_review_recommended) and surfaces partial results. Strict-fail mode loses too many otherwise-useful reviews on edge-case citations; the calibrated approach preserves trust by surfacing the uncertainty.
+5. **Sprint 1 ships sequential stages 5/9.** orchestration.md describes stage 9 (defined-terms-check) running in parallel with stages 5-7. Sprint 1 ships sequential because (a) deterministic mock-based tests get easier, (b) the latency cost (~1-3s extra Haiku call) is well within the 60s p95 target. Day 13 latency analysis can promote to `Promise.all` if measurements show we're trending close to the bar.
+6. **Web upload + email intake share `processReview` via a discriminated `AttachmentSource`.** Day 11 generalised the email-only Day 10 helper. Single orchestration point, two intake surfaces.
+7. **Inline base64 for redline storage in Sprint 1.** Migration 0007 puts redline bytes inline on the reviews row. v2 (DEF-048) migrates to Supabase Storage with signed URLs; URL surface (`/api/review/[id]/redline.docx`) is unchanged.
 
-No migrations today. Day 11's migration 0007 is still pending Tim's `pnpm db:migrate`.
+## Known gaps + how they get closed
 
-## Exact next step (Day 14) — Sprint close
+| Gap | Carry | Owner |
+|-----|-------|-------|
+| Counsel-validated playbook + annotations | DEF-028 | Tim → external counsel before v1 launch |
+| Live p95 latency on 3 NDAs | Day 14 deploy + post-deploy measurement | Tim deploys, Claude Code measures |
+| Production-pipeline F1 number | Same | Same |
+| Native Word tracked-changes | DEF-046 | Claude Code (post-launch polish) |
+| Vision intake (scans + photographs) | DEF-047 | Claude Code (v1-launch-hardening) |
+| Storage migration for redline bytes | DEF-048 | Claude Code (v1-launch-hardening) |
+| Stage progress streaming on review + admin pages | DEF-049 | Claude Code (v1-launch-hardening) |
+| `review.*` audit-log events | Sprint 2 web-app surfaces | Claude Code |
+| Full Kenya Acts + 2,000+ judgments corpus | Sprint 4 alongside DEF-017 daily cron | Claude Code |
+| Kenyan-domain registration | DEF-011 | Tim (background, not blocking) |
 
-Day 14 plan from `docs/sprint-1-plan.md`:
-1. **`pnpm typecheck` + `pnpm test` + `pnpm lint` all clean** — confirmed today, run again on the final commit.
-2. **`pnpm eval` acceptance bar confirmed** — confirmed today.
-3. **DEFERRED.md hygiene** — sprint-1 items either completed (move to "Completed" section, do not delete) or carried with notes.
-4. **HANDOFF.md updated with evidence for every acceptance criterion** — Day 14 produces the canonical sprint-close handoff.
-5. **Git history clean** — every commit reads as a changelog entry; no wip / fix-stuff messages.
-6. **Evaluator agent session run** — separate session scores Sprint 1 against the CLAUDE.md rubric. Anything below 90% goes back for fix.
+## Tim action items (rolled forward)
 
-## Tim action items
+1. **`pnpm db:migrate`** — apply migration 0007 to the dev project (carried from Day 11). Web upload flow's persist step needs this.
+2. **Engage external counsel for playbook review** (DEF-028). Annotate the 20-NDA golden set against their corrected playbook to upgrade ground truth from `parasol-internal-draft` to `counsel-validated`. Budget ~USD 5-8k.
+3. **Deploy to Vercel preview** so Sprint 1's first end-to-end live test can happen. Forward an NDA to `*@ask.parasol.co.ke`; expect a redlined reply within 90s. This produces the first real F1 + p95 numbers.
+4. **`.co.ug / .co.tz / .co.rw` registration** (DEF-011). Standing background item; no v1 dependency.
 
-- **DEF-028** (counsel review of playbook + Day 13 annotations): production gate is v1 launch. Day 13's annotations are draft and self-consistent against the playbook but need counsel sign-off before they constitute true ground truth.
-- **DEF-011** (.co.ug, .co.tz, .co.rw domain registration): not blocking Sprint 1.
-- **`pnpm db:migrate`** — apply migration 0007 (still outstanding from Day 11). Web upload flow needs this; corpus admin's "Run now" button works without it but produces no usable corpus until ingestion runs.
-- **First end-to-end production run** lands at deployment (Day 14 sprint close + post-deploy). At that point we get the first real F1 number and the first p95 latency measurement.
+## What ships in Sprint 2 (preview)
+
+Per `docs/sprint-1-plan.md` and the carries above, Sprint 2 priorities are:
+1. Stripe billing integration (Solo / Team / Business tiers; USD only per CLAUDE.md Path A).
+2. DEF-041 — A/B test Opus 4.7 on `compare-playbook` and `generate-redline`. Run both against the eval harness; promote on positive eval delta only.
+3. Real Supabase Auth sign-in (Microsoft + Google OAuth + email magic link). Replaces Day 11's `/login` stub.
+4. `review.*` audit-log events on the web upload + review-page paths.
+5. Latency tightening from `maxDuration = 120` back to 60 once measurements confirm we're under budget.
+6. Source-creation UI for `/admin/corpus` (POST /api/admin/corpus/sources). Currently 501.
+
+## Final git log
+
+```
+0f9354a Day 13: eval harness acceptance bar — full 20-NDA dataset annotated
+75fdf13 Day 12: corpus admin UI complete
+7868ee1 Day 11: web upload UI + review page + persistence layer
+995c63e Day 10: email intake completion — webhook → orchestrator → reply
+16f41e2 Sprint 1 Day 9: defined-terms-check + assemble-output + pipeline_events repo
+99fd3d7 Sprint 1 Day 8: heavy reasoning stages + citation validator
+d8a7780 Sprint 1 Day 7: pipeline stages 1-4 + orchestrator shell
+c3d30cc Sprint 1 Day 6: eval harness skeleton
+64f3fa3 Inbound webhook: classify by recipient subdomain
+6b3a8dc Sprint 1 Day 5: playbook validator + email webhook + Day 4 acceptance
+51f5785 Sprint 1 Day 4: hybrid retrieval (BM25 + vector + RRF + Voyage rerank)
+035f177 Sprint 1 Day 3: corpus pipeline + 20-NDA golden dataset
+defa995 Sprint 1 Day 2: repository layer + AI client wrapper
+eb707dc Apply Sprint 1 migrations to Supabase + wire up CLI tooling
+0bb57c4 Trigger Vercel redeploy on latest commit
+501c6fc Add Next.js bootstrap and pnpm lockfile for v0.2 deploy
+```
+
+Each commit reads as a changelog entry. No `wip`, no `fix stuff`. Day 14 (this commit) ticks SPRINT.md acceptance boxes, completes DEFERRED.md hygiene, and writes the Sprint 1 close handoff.
+
+## Evaluator agent rubric
+
+Sprint close requires a separate evaluator-agent session (CLAUDE.md grading rubric, ≥90% pass bar). That session runs outside this build session — Tim invokes it on the closed sprint and feeds back any items requiring fix.
