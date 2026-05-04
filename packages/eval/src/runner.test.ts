@@ -3,7 +3,7 @@ import { mkdtemp, writeFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
 import { stringify as stringifyYaml } from 'yaml'
-import { run, stubPipeline, loadAnnotations } from './runner.js'
+import { run, stubPipeline, loadAnnotations } from './runner'
 
 describe('runner — end-to-end with stub pipeline', () => {
   let dir: string

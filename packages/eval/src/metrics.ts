@@ -32,7 +32,7 @@ import type {
   AggregateScore,
   PipelineIssue,
   ExpectedIssue,
-} from './types.js'
+} from './types'
 
 // ─── Per-NDA scoring ─────────────────────────────────────────────────────────
 

@@ -10,12 +10,12 @@
 //
 // Haiku 4.5 — fast, cheap, good at structured cleanup.
 
-import { definePrompt } from '../types.js'
+import { definePrompt } from '../types'
 import {
   extractTextCleanOutputSchema,
   type ExtractTextCleanInput,
   type ExtractTextCleanOutput,
-} from '../stages/types.js'
+} from '../stages/types'
 
 export const extractTextCleanPrompt = definePrompt<ExtractTextCleanInput, ExtractTextCleanOutput>({
   name: 'extract-text-clean',

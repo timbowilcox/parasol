@@ -12,12 +12,12 @@
 //
 // Sonnet 4.7 in Sprint 1 (Opus 4.7 in Sprint 2 A/B per DEF-041).
 
-import { definePrompt } from '../types.js'
+import { definePrompt } from '../types'
 import {
   generateRedlineOutputSchema,
   type GenerateRedlineInput,
   type GenerateRedlineOutput,
-} from '../stages/types.js'
+} from '../stages/types'
 
 export const generateRedlinePrompt = definePrompt<GenerateRedlineInput, GenerateRedlineOutput>({
   name: 'generate-redline',

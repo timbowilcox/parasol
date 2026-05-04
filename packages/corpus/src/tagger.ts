@@ -13,7 +13,7 @@ import { createHash } from 'node:crypto'
 import { z } from 'zod'
 import { createMessage } from '@parasol/ai'
 import type { ClauseType } from '@parasol/core'
-import type { Chunk, AreaOfLaw } from './types.js'
+import type { Chunk, AreaOfLaw } from './types'
 
 // ─── Vocabulary ──────────────────────────────────────────────────────────────
 // Mirror these in the prompt and the Zod schema below to make the model's

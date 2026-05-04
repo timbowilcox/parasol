@@ -30,7 +30,7 @@ import type {
   TriageOutput,
   WebViewData,
   WebViewIssue,
-} from './stages/types.js'
+} from './stages/types'
 
 // ─── Public entry point ─────────────────────────────────────────────────────
 

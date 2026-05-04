@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { bindEventsToReview } from './pipeline-events.js'
+import { bindEventsToReview } from './pipeline-events'
 import type { PipelineEvent } from '@parasol/ai'
 
 // We pass a hand-built fake supabase client. The repository under test only

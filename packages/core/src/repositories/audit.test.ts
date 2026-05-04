@@ -5,8 +5,8 @@ import {
   GENESIS_HASH,
   computeChainHash,
   stableStringify,
-} from './audit.js'
-import type { SupabaseClient } from './types.js'
+} from './audit'
+import type { SupabaseClient } from './types'
 
 // ─── Pure-function tests (no mock needed) ────────────────────────────────────
 

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { chunk, splitToTarget } from './chunker.js'
-import type { NormalisedDocument } from './types.js'
+import { chunk, splitToTarget } from './chunker'
+import type { NormalisedDocument } from './types'
 
 const buildDoc = (overrides: Partial<NormalisedDocument> = {}): NormalisedDocument => ({
   canonicalId: '2019/24',

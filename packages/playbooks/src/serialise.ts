@@ -13,7 +13,7 @@
 // - Status banner at the top so the model knows whether the playbook is
 //   draft (counsel review pending — DEF-028 path) or production.
 
-import type { Playbook } from './schema.js'
+import type { Playbook } from './schema'
 
 export function serialisePlaybookForContext(playbook: Playbook): string {
   const lines: string[] = []

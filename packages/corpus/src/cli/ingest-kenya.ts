@@ -13,9 +13,9 @@
 
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@parasol/core'
-import { CorpusRepository } from '../repository.js'
-import { KenyaLawScraper } from '../scrapers/kenyalaw.js'
-import { ingestSource } from '../ingest.js'
+import { CorpusRepository } from '../repository'
+import { KenyaLawScraper } from '../scrapers/kenyalaw'
+import { ingestSource } from '../ingest'
 
 interface CliFlags {
   limit?: number

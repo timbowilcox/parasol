@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { triageStage } from './triage.js'
-import { triageOutputSchema } from './types.js'
-import { overrideClient } from '../index.js'
-import type { OrchestratorContext, PipelineEvent } from '../types.js'
+import { triageStage } from './triage'
+import { triageOutputSchema } from './types'
+import { overrideClient } from '../index'
+import type { OrchestratorContext, PipelineEvent } from '../types'
 
 const fakeMessage = (json: object) => ({
   id: 'msg_x',

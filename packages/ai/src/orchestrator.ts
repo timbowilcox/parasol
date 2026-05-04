@@ -23,7 +23,7 @@ import type {
   Jurisdiction,
 } from '@parasol/core'
 import { UnsupportedContractTypeError, PipelineError } from '@parasol/core'
-import type { OrchestratorContext, PipelineEvent, ModelEnv } from './types.js'
+import type { OrchestratorContext, PipelineEvent, ModelEnv } from './types'
 import {
   qualityAssessStage,
   extractTextCleanStage,
@@ -43,13 +43,13 @@ import {
   type PlaybookDeviation,
   type DefinedTermIssue,
   type AssembledOutput,
-} from './stages/index.js'
+} from './stages/index'
 import {
   validateCitations,
   type CitationResolver,
   type ValidationOutcome,
-} from './citation-validator.js'
-import { assembleOutput } from './assemble-output.js'
+} from './citation-validator'
+import { assembleOutput } from './assemble-output'
 
 // ─── Dependency-injected helpers (provided by the caller) ───────────────────
 //

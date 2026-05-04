@@ -46,9 +46,9 @@ import type { Database } from '@parasol/core'
 // resolved schema literal). Without the loose alias the route handlers
 // can't pass their SSR client into this helper.
 import type { SupabaseClient } from '@parasol/core'
-import { extractPages } from '@/lib/intake/extract-pages.js'
-import { fetchInboundAttachment, sendReply } from '@/lib/email/resend-send.js'
-import { bindEventsToReview } from './pipeline-events.js'
+import { extractPages } from '@/lib/intake/extract-pages'
+import { fetchInboundAttachment, sendReply } from '@/lib/email/resend-send'
+import { bindEventsToReview } from './pipeline-events'
 
 // Discriminated union over the two ways bytes arrive: from Resend's
 // attachment endpoint (email path) or directly from the multipart upload
@@ -402,3 +402,4 @@ function mapCitationSource(source: string): string | null {
     default: return null
   }
 }
+

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto'
-import { BaseRepository } from './base.js'
-import type { Json, Tables, TablesInsert } from './types.js'
+import { BaseRepository } from './base'
+import type { Json, Tables, TablesInsert } from './types'
 
 export type AuditLog = Tables<'audit_log'>
 type AuditLogInsertRow = TablesInsert<'audit_log'>

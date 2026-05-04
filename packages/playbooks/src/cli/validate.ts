@@ -16,8 +16,8 @@ import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@parasol/core'
-import { validatePlaybookFile, type CitationResolver, type ValidationIssue } from '../validator.js'
-import { SHIPPED_PLAYBOOKS } from '../loader.js'
+import { validatePlaybookFile, type CitationResolver, type ValidationIssue } from '../validator'
+import { SHIPPED_PLAYBOOKS } from '../loader'
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 

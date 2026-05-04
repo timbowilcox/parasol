@@ -11,12 +11,12 @@
 // required. Best-effort per orchestration.md (failures don't block the
 // pipeline; the orchestrator wraps this stage in a try/catch).
 
-import { definePrompt } from '../types.js'
+import { definePrompt } from '../types'
 import {
   definedTermsCheckOutputSchema,
   type DefinedTermsCheckInput,
   type DefinedTermsCheckOutput,
-} from '../stages/types.js'
+} from '../stages/types'
 
 export const definedTermsCheckPrompt = definePrompt<DefinedTermsCheckInput, DefinedTermsCheckOutput>({
   name: 'defined-terms-check',

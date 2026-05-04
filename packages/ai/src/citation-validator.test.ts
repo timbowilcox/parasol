@@ -4,8 +4,8 @@ import {
   degradeConfidence,
   countTrustedCitations,
   __testing,
-} from './citation-validator.js'
-import type { PipelineIssue, PipelineCitation } from './stages/types.js'
+} from './citation-validator'
+import type { PipelineIssue, PipelineCitation } from './stages/types'
 
 const issue = (overrides: Partial<PipelineIssue> = {}): PipelineIssue => ({
   clauseId: 'governing_law',

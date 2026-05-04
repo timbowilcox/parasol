@@ -14,9 +14,9 @@
 import { readFile } from 'node:fs/promises'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { EvalRunResult } from '../types.js'
-import { SPRINT_1_ACCEPTANCE_BAR } from '../types.js'
-import { checkAcceptanceBar } from '../metrics.js'
+import type { EvalRunResult } from '../types'
+import { SPRINT_1_ACCEPTANCE_BAR } from '../types'
+import { checkAcceptanceBar } from '../metrics'
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..')
 const DEFAULT_RESULTS_DIR = resolve(PACKAGE_ROOT, 'results')

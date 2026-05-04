@@ -1,6 +1,6 @@
-import { BaseRepository } from './base.js'
-import type { Tables } from './types.js'
-import { NotFoundError } from '../errors/index.js'
+import { BaseRepository } from './base'
+import type { Tables } from './types'
+import { NotFoundError } from '../errors/index'
 
 export type Workspace = Tables<'workspaces'>
 

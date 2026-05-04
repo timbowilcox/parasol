@@ -1,12 +1,12 @@
-import { triagePrompt } from '../prompts/triage.js'
-import type { Stage } from '../types.js'
-import { executeStage, DEFAULT_RETRY } from './runner.js'
+import { triagePrompt } from '../prompts/triage'
+import type { Stage } from '../types'
+import { executeStage, DEFAULT_RETRY } from './runner'
 import {
   triageInputSchema,
   triageOutputSchema,
   type TriageInput,
   type TriageOutput,
-} from './types.js'
+} from './types'
 
 export const triageStage: Stage<TriageInput, TriageOutput> = {
   name: 'triage',

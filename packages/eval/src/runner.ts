@@ -8,10 +8,10 @@ import { readFile, readdir } from 'node:fs/promises'
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { parse as parseYaml } from 'yaml'
-import { groundTruthSchema } from './schema.js'
-import type { GroundTruth, PipelineOutput, PerNdaScore, EvalRunResult } from './types.js'
-import { scoreNda, buildRunResult } from './metrics.js'
-import { runStubPipeline, type StubMode } from './pipeline-stub.js'
+import { groundTruthSchema } from './schema'
+import type { GroundTruth, PipelineOutput, PerNdaScore, EvalRunResult } from './types'
+import { scoreNda, buildRunResult } from './metrics'
+import { runStubPipeline, type StubMode } from './pipeline-stub'
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 export const DEFAULT_GOLDEN_DIR = resolve(PACKAGE_ROOT, 'data', 'golden', 'nda')

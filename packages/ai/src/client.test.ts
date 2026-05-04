@@ -7,7 +7,7 @@ import {
   plainTextBlock,
   createMessage,
   overrideClient,
-} from './index.js'
+} from './index'
 
 // ─── resolveModel ────────────────────────────────────────────────────────────
 

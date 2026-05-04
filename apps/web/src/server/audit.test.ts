@@ -12,7 +12,7 @@ vi.mock('@parasol/core', async (importOriginal) => {
   }
 })
 
-import { logAdminEvent, extractRequestContext } from './audit.js'
+import { logAdminEvent, extractRequestContext } from './audit'
 
 beforeEach(() => {
   vi.clearAllMocks()

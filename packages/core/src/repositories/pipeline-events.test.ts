@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from 'vitest'
-import { PipelineEventRepository, type PipelineEvent } from './pipeline-events.js'
-import type { SupabaseClient } from './types.js'
+import { PipelineEventRepository, type PipelineEvent } from './pipeline-events'
+import type { SupabaseClient } from './types'
 
 const sampleRow: PipelineEvent = {
   id: 'pe-1',

@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { runOrchestrator, SPRINT_1_ACCEPTED_CONTRACT_TYPES } from './orchestrator.js'
-import { overrideClient } from './index.js'
+import { runOrchestrator, SPRINT_1_ACCEPTED_CONTRACT_TYPES } from './orchestrator'
+import { overrideClient } from './index'
 
 // Build an Anthropic SDK stub that responds to each consecutive call with
 // the next stub message. Lets us drive the orchestrator deterministically

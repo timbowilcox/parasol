@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { comparePlaybookStage } from './compare-playbook.js'
-import { comparePlaybookOutputSchema } from './types.js'
-import { overrideClient } from '../index.js'
-import type { OrchestratorContext, PipelineEvent } from '../types.js'
+import { comparePlaybookStage } from './compare-playbook'
+import { comparePlaybookOutputSchema } from './types'
+import { overrideClient } from '../index'
+import type { OrchestratorContext, PipelineEvent } from '../types'
 
 const fakeMessage = (json: object) => ({
   id: 'msg_x',

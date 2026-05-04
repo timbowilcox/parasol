@@ -8,12 +8,12 @@
 // Versioning: bump version on any wording change to the system prompt
 // or output schema. Eval suite gates against regressions per stage.
 
-import { definePrompt } from '../types.js'
+import { definePrompt } from '../types'
 import {
   qualityAssessOutputSchema,
   type QualityAssessInput,
   type QualityAssessOutput,
-} from '../stages/types.js'
+} from '../stages/types'
 
 export const qualityAssessPrompt = definePrompt<QualityAssessInput, QualityAssessOutput>({
   name: 'quality-assess',

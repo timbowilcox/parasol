@@ -58,3 +58,5 @@ packages/eval/results/run-*.json
 .cache/
 *.tsbuildinfo
 next-env.d.ts
+
+.vercel

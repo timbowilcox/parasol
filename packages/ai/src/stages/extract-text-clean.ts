@@ -1,12 +1,12 @@
-import { extractTextCleanPrompt } from '../prompts/extract-text-clean.js'
-import type { Stage } from '../types.js'
-import { executeStage, DEFAULT_RETRY } from './runner.js'
+import { extractTextCleanPrompt } from '../prompts/extract-text-clean'
+import type { Stage } from '../types'
+import { executeStage, DEFAULT_RETRY } from './runner'
 import {
   extractTextCleanInputSchema,
   extractTextCleanOutputSchema,
   type ExtractTextCleanInput,
   type ExtractTextCleanOutput,
-} from './types.js'
+} from './types'
 
 export const extractTextCleanStage: Stage<ExtractTextCleanInput, ExtractTextCleanOutput> = {
   name: 'extract-text-clean',

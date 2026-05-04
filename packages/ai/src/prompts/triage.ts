@@ -7,12 +7,12 @@
 //
 // Haiku 4.5 — pattern-matches contract structure cheaply and quickly.
 
-import { definePrompt } from '../types.js'
+import { definePrompt } from '../types'
 import {
   triageOutputSchema,
   type TriageInput,
   type TriageOutput,
-} from '../stages/types.js'
+} from '../stages/types'
 
 export const triagePrompt = definePrompt<TriageInput, TriageOutput>({
   name: 'triage',

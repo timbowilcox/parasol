@@ -9,8 +9,8 @@
 
 import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import { validatePlaybookFile } from './validator.js'
-import type { Playbook } from './schema.js'
+import { validatePlaybookFile } from './validator'
+import type { Playbook } from './schema'
 import type { Jurisdiction, ContractType } from '@parasol/core'
 import { NotFoundError, ValidationError } from '@parasol/core'
 

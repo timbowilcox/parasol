@@ -17,10 +17,10 @@
 
 import * as cheerio from 'cheerio'
 import { CorpusError } from '@parasol/core'
-import type { RawDocument } from '../types.js'
+import type { RawDocument } from '../types'
 import type { Jurisdiction, DocumentType } from '@parasol/core'
-import type { Scraper } from './types.js'
-import { politeFetch } from './types.js'
+import type { Scraper } from './types'
+import { politeFetch } from './types'
 
 // As of the 2024 redesign, kenyalaw.org redirects most legal-content paths to
 // new.kenyalaw.org which serves the Akoma Ntoso (AKN) HTML rendering. The

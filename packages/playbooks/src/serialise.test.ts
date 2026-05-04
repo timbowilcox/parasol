@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { serialisePlaybookForContext } from './serialise.js'
-import type { Playbook } from './schema.js'
+import { serialisePlaybookForContext } from './serialise'
+import type { Playbook } from './schema'
 
 const minimalPlaybook: Playbook = {
   schema_version: '1.0',

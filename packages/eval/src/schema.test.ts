@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { groundTruthSchema } from './schema.js'
+import { groundTruthSchema } from './schema'
 
 const minimalGt = {
   filename: 'nda-001.pdf',

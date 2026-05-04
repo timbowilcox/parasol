@@ -1,7 +1,7 @@
-import { BaseRepository } from './base.js'
-import type { Tables, TablesInsert } from './types.js'
-import { NotFoundError, ValidationError } from '../errors/index.js'
-import type { ReviewStatus } from '../types/index.js'
+import { BaseRepository } from './base'
+import type { Tables, TablesInsert } from './types'
+import { NotFoundError, ValidationError } from '../errors/index'
+import type { ReviewStatus } from '../types/index'
 
 export type Review = Tables<'reviews'>
 type ReviewInsertRow = TablesInsert<'reviews'>

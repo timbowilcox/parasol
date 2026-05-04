@@ -1,12 +1,12 @@
-import { extractTextDegradedPrompt } from '../prompts/extract-text-degraded.js'
-import type { Stage } from '../types.js'
-import { executeStage, DEFAULT_RETRY } from './runner.js'
+import { extractTextDegradedPrompt } from '../prompts/extract-text-degraded'
+import type { Stage } from '../types'
+import { executeStage, DEFAULT_RETRY } from './runner'
 import {
   extractTextDegradedInputSchema,
   extractTextDegradedOutputSchema,
   type ExtractTextDegradedInput,
   type ExtractTextDegradedOutput,
-} from './types.js'
+} from './types'
 
 export const extractTextDegradedStage: Stage<ExtractTextDegradedInput, ExtractTextDegradedOutput> = {
   name: 'extract-text-degraded',

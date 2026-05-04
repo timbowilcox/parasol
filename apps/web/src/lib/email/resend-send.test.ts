@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { sendReply, fetchInboundAttachment } from './resend-send.js'
+import { sendReply, fetchInboundAttachment } from './resend-send'
 
 const ORIGINAL_FETCH = globalThis.fetch
 const ORIGINAL_API_KEY = process.env['RESEND_API_KEY']

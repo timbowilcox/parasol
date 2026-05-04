@@ -3,8 +3,8 @@ import {
   retrieveAuthority,
   reciprocalRankFusion,
   overrideVoyageClient,
-} from './retrieval.js'
-import { overrideEmbedderClient } from './embedder.js'
+} from './retrieval'
+import { overrideEmbedderClient } from './embedder'
 import type {
   CorpusChunkBm25Result,
   CorpusChunkSearchResult,

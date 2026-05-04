@@ -9,7 +9,7 @@ import {
   classifyRecipients,
   isAtIntakeSubdomain,
   isAtParasolDomain,
-} from './email-webhook.js'
+} from './email-webhook'
 
 // A real Svix-format secret. Must be base64-encoded random bytes; Svix's
 // internal validation rejects anything else. Generated for tests only.

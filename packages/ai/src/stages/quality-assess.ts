@@ -1,12 +1,12 @@
-import { qualityAssessPrompt } from '../prompts/quality-assess.js'
-import type { Stage } from '../types.js'
-import { executeStage, DEFAULT_RETRY } from './runner.js'
+import { qualityAssessPrompt } from '../prompts/quality-assess'
+import type { Stage } from '../types'
+import { executeStage, DEFAULT_RETRY } from './runner'
 import {
   qualityAssessInputSchema,
   qualityAssessOutputSchema,
   type QualityAssessInput,
   type QualityAssessOutput,
-} from './types.js'
+} from './types'
 
 export const qualityAssessStage: Stage<QualityAssessInput, QualityAssessOutput> = {
   name: 'quality-assess',

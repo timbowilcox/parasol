@@ -1,7 +1,7 @@
 import type { SupabaseClient as SupabaseClientGeneric } from '@supabase/supabase-js'
-import type { Database } from '../db.js'
+import type { Database } from '../db'
 
-export type { Json } from '../db.js'
+export type { Json } from '../db'
 
 // Re-export the typed client. We allow the SchemaName generic to vary
 // because the SSR client from @supabase/ssr surfaces 5 type params with a

@@ -2,8 +2,8 @@ import { describe, it, expect, beforeAll, afterAll } from 'vitest'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { resolve } from 'node:path'
-import { writeJson, formatSummary, DEFAULT_RESULTS_DIR } from './reporter.js'
-import type { EvalRunResult } from './types.js'
+import { writeJson, formatSummary, DEFAULT_RESULTS_DIR } from './reporter'
+import type { EvalRunResult } from './types'
 
 const sampleResult: EvalRunResult = {
   ran_at: '2026-05-04T10:00:00.000Z',

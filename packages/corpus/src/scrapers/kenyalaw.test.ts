@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { KenyaLawScraper } from './kenyalaw.js'
-import { __resetPoliteThrottle } from './types.js'
+import { KenyaLawScraper } from './kenyalaw'
+import { __resetPoliteThrottle } from './types'
 
 const originalFetch = globalThis.fetch
 

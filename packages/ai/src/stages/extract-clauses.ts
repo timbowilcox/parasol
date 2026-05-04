@@ -1,12 +1,12 @@
-import { extractClausesPrompt } from '../prompts/extract-clauses.js'
-import type { Stage } from '../types.js'
-import { executeStage, DEFAULT_RETRY } from './runner.js'
+import { extractClausesPrompt } from '../prompts/extract-clauses'
+import type { Stage } from '../types'
+import { executeStage, DEFAULT_RETRY } from './runner'
 import {
   extractClausesInputSchema,
   extractClausesOutputSchema,
   type ExtractClausesInput,
   type ExtractClausesOutput,
-} from './types.js'
+} from './types'
 
 export const extractClausesStage: Stage<ExtractClausesInput, ExtractClausesOutput> = {
   name: 'extract-clauses',

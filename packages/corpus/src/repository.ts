@@ -7,7 +7,7 @@
 
 import { BaseRepository, type Tables, type TablesInsert } from '@parasol/core'
 import { NotFoundError } from '@parasol/core'
-import type { Chunk } from './types.js'
+import type { Chunk } from './types'
 
 export type CorpusSource = Tables<'corpus_sources'>
 export type CorpusDocument = Tables<'corpus_documents'>

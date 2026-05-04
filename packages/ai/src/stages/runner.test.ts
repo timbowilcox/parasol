@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
 import { z } from 'zod'
-import { executeStage, tolerantJsonParse, DEFAULT_RETRY } from './runner.js'
-import { overrideClient, definePrompt } from '../index.js'
-import type { Stage, OrchestratorContext, PipelineEvent } from '../types.js'
+import { executeStage, tolerantJsonParse, DEFAULT_RETRY } from './runner'
+import { overrideClient, definePrompt } from '../index'
+import type { Stage, OrchestratorContext, PipelineEvent } from '../types'
 import { PipelineError } from '@parasol/core'
 
 // ─── tolerantJsonParse ──────────────────────────────────────────────────────

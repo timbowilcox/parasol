@@ -14,7 +14,7 @@
 
 import * as cheerio from 'cheerio'
 import type { AnyNode } from 'domhandler'
-import type { RawDocument, NormalisedDocument, Section } from './types.js'
+import type { RawDocument, NormalisedDocument, Section } from './types'
 
 // `AnyNode` covers all nodes a walker might encounter (text, element,
 // comment, etc.). Tag-specific helpers narrow to `Element` via runtime guard.

@@ -5,14 +5,14 @@ import {
   checkAcceptanceBar,
   buildRunResult,
   normaliseForSubstringMatch,
-} from './metrics.js'
+} from './metrics'
 import type {
   GroundTruth,
   PipelineOutput,
   PipelineIssue,
   PerNdaScore,
-} from './types.js'
-import { SPRINT_1_ACCEPTANCE_BAR } from './types.js'
+} from './types'
+import { SPRINT_1_ACCEPTANCE_BAR } from './types'
 
 const baseGt = (issues: GroundTruth['expected_issues'] = [], citations: GroundTruth['expected_citations'] = []): GroundTruth => ({
   filename: 'nda-test.pdf',

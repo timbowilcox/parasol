@@ -23,7 +23,7 @@ import {
   NON_CORPUS_CITATION_SOURCES,
   type Playbook,
   type CitationSource,
-} from './schema.js'
+} from './schema'
 
 // A function that resolves a citation by (source, canonical_id) to whether it
 // exists in the corpus. Returns true if found, false otherwise. The validator

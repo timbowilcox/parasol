@@ -11,12 +11,12 @@
 // - Section reference is best-effort; absence is fine.
 // - Verbatim raw_text is required (downstream redline + hallucination check).
 
-import { definePrompt } from '../types.js'
+import { definePrompt } from '../types'
 import {
   extractClausesOutputSchema,
   type ExtractClausesInput,
   type ExtractClausesOutput,
-} from '../stages/types.js'
+} from '../stages/types'
 
 // Curated clause-id vocabulary for Sprint 1's NDA contract type.
 // Mirrors packages/playbooks/kenya/nda.yaml clause ids exactly.

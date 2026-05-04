@@ -1,9 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { extractClausesStage } from './extract-clauses.js'
-import { extractClausesOutputSchema } from './types.js'
-import { overrideClient } from '../index.js'
-import { __testing as extractClausesTesting } from '../prompts/extract-clauses.js'
-import type { OrchestratorContext, PipelineEvent } from '../types.js'
+import { extractClausesStage } from './extract-clauses'
+import { extractClausesOutputSchema } from './types'
+import { overrideClient } from '../index'
+import { __testing as extractClausesTesting } from '../prompts/extract-clauses'
+import type { OrchestratorContext, PipelineEvent } from '../types'
 // Re-import the playbook clause vocabulary indirectly via the test helper.
 // Day 7 keeps the vocabulary inlined in the prompt; the test asserts it's
 // in sync with what the playbook actually ships.

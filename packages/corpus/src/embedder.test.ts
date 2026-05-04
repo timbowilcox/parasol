@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { embedTexts, embedChunks, overrideEmbedderClient } from './embedder.js'
+import { embedTexts, embedChunks, overrideEmbedderClient } from './embedder'
 import { EmbeddingError } from '@parasol/core'
-import type { Chunk } from './types.js'
+import type { Chunk } from './types'
 
 interface FakeClient {
   embed: ReturnType<typeof vi.fn>

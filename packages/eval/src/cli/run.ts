@@ -20,9 +20,9 @@
 import { execSync } from 'node:child_process'
 import { createClient } from '@supabase/supabase-js'
 import type { Database } from '@parasol/core'
-import { run, stubPipeline, type Pipeline } from '../runner.js'
-import { writeJson, formatSummary, DEFAULT_RESULTS_DIR } from '../reporter.js'
-import type { StubMode } from '../pipeline-stub.js'
+import { run, stubPipeline, type Pipeline } from '../runner'
+import { writeJson, formatSummary, DEFAULT_RESULTS_DIR } from '../reporter'
+import type { StubMode } from '../pipeline-stub'
 
 interface CliFlags {
   pipeline: 'stub-oracle' | 'stub-noisy' | 'production'

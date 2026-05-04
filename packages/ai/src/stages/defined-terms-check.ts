@@ -1,12 +1,12 @@
-import { definedTermsCheckPrompt } from '../prompts/defined-terms-check.js'
-import type { Stage } from '../types.js'
-import { executeStage, DEFAULT_RETRY } from './runner.js'
+import { definedTermsCheckPrompt } from '../prompts/defined-terms-check'
+import type { Stage } from '../types'
+import { executeStage, DEFAULT_RETRY } from './runner'
 import {
   definedTermsCheckInputSchema,
   definedTermsCheckOutputSchema,
   type DefinedTermsCheckInput,
   type DefinedTermsCheckOutput,
-} from './types.js'
+} from './types'
 
 export const definedTermsCheckStage: Stage<DefinedTermsCheckInput, DefinedTermsCheckOutput> = {
   name: 'defined-terms-check',

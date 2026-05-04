@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { definedTermsCheckStage } from './defined-terms-check.js'
-import { definedTermsCheckOutputSchema } from './types.js'
-import { overrideClient } from '../index.js'
-import type { OrchestratorContext, PipelineEvent } from '../types.js'
+import { definedTermsCheckStage } from './defined-terms-check'
+import { definedTermsCheckOutputSchema } from './types'
+import { overrideClient } from '../index'
+import type { OrchestratorContext, PipelineEvent } from '../types'
 
 const fakeMessage = (json: object) => ({
   id: 'msg', type: 'message', role: 'assistant',

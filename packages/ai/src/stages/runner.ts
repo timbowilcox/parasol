@@ -16,14 +16,14 @@
 
 import type { Message, MessageParam, TextBlockParam } from '@anthropic-ai/sdk/resources/messages'
 import { PipelineError } from '@parasol/core'
-import { createMessage, cachedTextBlock } from '../client.js'
+import { createMessage, cachedTextBlock } from '../client'
 import type {
   Stage,
   PromptArtefact,
   OrchestratorContext,
   PipelineEvent,
   RetryPolicy,
-} from '../types.js'
+} from '../types'
 
 // ─── executeStage — the canonical run() implementation ──────────────────────
 

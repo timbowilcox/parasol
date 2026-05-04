@@ -16,7 +16,7 @@
 //   manual_review → unchanged   (already at the floor)
 
 import type { ConfidenceLevel } from '@parasol/core'
-import type { PipelineIssue, PipelineCitation } from './stages/types.js'
+import type { PipelineIssue, PipelineCitation } from './stages/types'
 
 // Citation source types whose canonical_id is expected to resolve in
 // corpus_documents. Mirror packages/playbooks/src/schema.ts. market-norm

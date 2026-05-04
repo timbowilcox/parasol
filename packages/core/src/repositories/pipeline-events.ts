@@ -1,5 +1,5 @@
-import { BaseRepository } from './base.js'
-import type { Tables, TablesInsert } from './types.js'
+import { BaseRepository } from './base'
+import type { Tables, TablesInsert } from './types'
 
 // Note: the type Tables<'pipeline_events'> is re-exported from db.ts as
 // PipelineEventRow; we re-export the row type here under a name that won't

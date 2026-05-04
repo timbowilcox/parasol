@@ -9,9 +9,9 @@
 import { mkdir, writeFile } from 'node:fs/promises'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { EvalRunResult, AggregateScore, PerNdaScore } from './types.js'
-import { checkAcceptanceBar } from './metrics.js'
-import { SPRINT_1_ACCEPTANCE_BAR } from './types.js'
+import type { EvalRunResult, AggregateScore, PerNdaScore } from './types'
+import { checkAcceptanceBar } from './metrics'
+import { SPRINT_1_ACCEPTANCE_BAR } from './types'
 
 const PACKAGE_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 export const DEFAULT_RESULTS_DIR = resolve(PACKAGE_ROOT, 'results')

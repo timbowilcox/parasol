@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { normalise, splitHeadingLabel, cleanText, serialiseSections } from './normaliser.js'
-import type { RawDocument } from './types.js'
+import { normalise, splitHeadingLabel, cleanText, serialiseSections } from './normaliser'
+import type { RawDocument } from './types'
 
 const baseRaw = (overrides: Partial<RawDocument> = {}): RawDocument => ({
   canonicalId: '2019/24',

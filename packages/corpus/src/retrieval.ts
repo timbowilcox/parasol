@@ -21,7 +21,7 @@ import type {
   ClauseType,
   DocumentType,
 } from '@parasol/core'
-import { embedTexts } from './embedder.js'
+import { embedTexts } from './embedder'
 
 // ─── Public API ──────────────────────────────────────────────────────────────
 

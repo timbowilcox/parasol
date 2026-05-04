@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { extractPages } from './extract-pages.js'
+import { extractPages } from './extract-pages'
 
 // pdf-parse and mammoth are NOT mocked: we generate a tiny real DOCX in
 // memory below and a hand-built PDF byte stream. The library calls run for

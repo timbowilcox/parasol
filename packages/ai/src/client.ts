@@ -8,7 +8,7 @@
 import Anthropic from '@anthropic-ai/sdk'
 import type { Message, MessageParam, TextBlockParam } from '@anthropic-ai/sdk/resources/messages'
 import type { ModelRole } from '@parasol/core'
-import { resolveModel, type ModelEnv } from './types.js'
+import { resolveModel, type ModelEnv } from './types'
 
 // ─── Client singleton ────────────────────────────────────────────────────────
 

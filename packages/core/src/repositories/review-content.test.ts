@@ -3,8 +3,8 @@ import {
   ExtractedClauseRepository,
   IssueRepository,
   CitationRepository,
-} from './review-content.js'
-import type { SupabaseClient } from './types.js'
+} from './review-content'
+import type { SupabaseClient } from './types'
 
 interface FakeChain {
   insertedRow: unknown

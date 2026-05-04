@@ -1,4 +1,4 @@
-import type { SupabaseClient } from './types.js'
+import type { SupabaseClient } from './types'
 
 // All repositories receive a SupabaseClient at construction. The client is
 // produced by the app layer (apps/web/src/lib/supabase/server.ts uses

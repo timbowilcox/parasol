@@ -9,7 +9,7 @@
 // could skip persistence (the customer's email client held the only copy);
 // the web path can't.
 
-import { BaseRepository } from './base.js'
+import { BaseRepository } from './base'
 import type {
   ExtractedClauseInsert,
   ExtractedClauseRow,
@@ -17,7 +17,7 @@ import type {
   IssueRow,
   CitationInsert,
   CitationRow,
-} from '../db.js'
+} from '../db'
 
 // ─── Extracted clauses ──────────────────────────────────────────────────────
 

@@ -67,10 +67,10 @@ vi.mock('@parasol/core', async (importOriginal) => {
   }
 })
 
-import { processReview } from './process-review.js'
+import { processReview } from './process-review'
 import { runOrchestrator } from '@parasol/ai'
-import { extractPages } from '@/lib/intake/extract-pages.js'
-import { fetchInboundAttachment, sendReply } from '@/lib/email/resend-send.js'
+import { extractPages } from '@/lib/intake/extract-pages'
+import { fetchInboundAttachment, sendReply } from '@/lib/email/resend-send'
 
 const baseInput = {
   supabase: {} as never,
@@ -286,3 +286,4 @@ describe('processReview — subject formatting', () => {
     expect(sendArg.subject.startsWith('Re: NDA')).toBe(true)
   })
 })
+

@@ -15,7 +15,7 @@
 // The runner picks one via the --stub flag. Production pipeline (Day 9)
 // replaces this entirely.
 
-import type { GroundTruth, PipelineOutput, PipelineIssue } from './types.js'
+import type { GroundTruth, PipelineOutput, PipelineIssue } from './types'
 
 export type StubMode = 'oracle' | 'noisy'
 

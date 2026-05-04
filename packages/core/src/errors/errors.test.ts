@@ -15,7 +15,7 @@ import {
   QualityTooLowError,
   CorpusError,
   EmbeddingError,
-} from './index.js'
+} from './index'
 
 describe('AppError', () => {
   it('sets name, code, statusCode, message', () => {

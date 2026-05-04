@@ -6,8 +6,8 @@ import {
   contentHash,
   InMemoryTagCache,
   __testing,
-} from './tagger.js'
-import type { Chunk } from './types.js'
+} from './tagger'
+import type { Chunk } from './types'
 
 describe('contentHash', () => {
   it('is deterministic and changes on input change', () => {

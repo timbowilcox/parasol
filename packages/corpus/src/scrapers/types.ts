@@ -8,7 +8,7 @@
 // The orchestrator (ingest.ts) handles iteration, idempotency (re-fetch
 // skipping based on existing corpus_documents rows), and persistence.
 
-import type { RawDocument } from '../types.js'
+import type { RawDocument } from '../types'
 
 export interface Scraper {
   // Stable slug — must match a row in corpus_sources.slug.

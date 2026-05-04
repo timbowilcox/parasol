@@ -1,11 +1,11 @@
 import { describe, it, expect } from 'vitest'
-import { assembleOutput } from './assemble-output.js'
+import { assembleOutput } from './assemble-output'
 import type {
   ExtractedClauseDraft,
   PipelineIssue,
   TriageOutput,
   DefinedTermIssue,
-} from './stages/types.js'
+} from './stages/types'
 
 const triage = (overrides: Partial<TriageOutput> = {}): TriageOutput => ({
   contractType: 'nda',

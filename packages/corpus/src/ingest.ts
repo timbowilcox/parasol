@@ -10,16 +10,16 @@
 // Re-running with no source changes still inserts a new retrieved_at row;
 // callers wanting strict skip semantics should pass `skipUnchanged: true`.
 
-import type { Scraper } from './scrapers/types.js'
-import type { CorpusRepository } from './repository.js'
+import type { Scraper } from './scrapers/types'
+import type { CorpusRepository } from './repository'
 import type {
   IngestedDocumentResult,
   IngestionRunResult,
-} from './types.js'
-import { normalise } from './normaliser.js'
-import { chunk as chunkDocument } from './chunker.js'
-import { embedChunks } from './embedder.js'
-import { tagChunks, type TagOptions } from './tagger.js'
+} from './types'
+import { normalise } from './normaliser'
+import { chunk as chunkDocument } from './chunker'
+import { embedChunks } from './embedder'
+import { tagChunks, type TagOptions } from './tagger'
 
 export interface IngestOptions {
   scraper: Scraper

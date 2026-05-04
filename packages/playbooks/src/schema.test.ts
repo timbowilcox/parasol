@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { playbookSchema, citationSchema, clauseSchema } from './schema.js'
+import { playbookSchema, citationSchema, clauseSchema } from './schema'
 
 const minimalClause = {
   id: 'confidentiality_term',

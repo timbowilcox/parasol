@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { validatePlaybook, type CitationResolver } from './validator.js'
+import { validatePlaybook, type CitationResolver } from './validator'
 
 const buildPlaybook = (overrides: Record<string, unknown> = {}) => ({
   schema_version: '1.0',

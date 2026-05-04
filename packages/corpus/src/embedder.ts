@@ -8,7 +8,7 @@
 
 import { VoyageAIClient } from 'voyageai'
 import { EmbeddingError } from '@parasol/core'
-import type { Chunk } from './types.js'
+import type { Chunk } from './types'
 
 const DEFAULT_MODEL = 'voyage-3'
 const DEFAULT_BATCH_SIZE = 128

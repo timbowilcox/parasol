@@ -1,12 +1,12 @@
-import { generateRedlinePrompt } from '../prompts/generate-redline.js'
-import type { Stage } from '../types.js'
-import { executeStage, DEFAULT_RETRY } from './runner.js'
+import { generateRedlinePrompt } from '../prompts/generate-redline'
+import type { Stage } from '../types'
+import { executeStage, DEFAULT_RETRY } from './runner'
 import {
   generateRedlineInputSchema,
   generateRedlineOutputSchema,
   type GenerateRedlineInput,
   type GenerateRedlineOutput,
-} from './types.js'
+} from './types'
 
 export const generateRedlineStage: Stage<GenerateRedlineInput, GenerateRedlineOutput> = {
   name: 'generate-redline',

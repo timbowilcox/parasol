@@ -9,12 +9,12 @@
 // Note: this prompt expects the runner to attach images as image content
 // blocks in the user message. The Day 7 stage takes care of that wiring.
 
-import { definePrompt } from '../types.js'
+import { definePrompt } from '../types'
 import {
   extractTextDegradedOutputSchema,
   type ExtractTextDegradedInput,
   type ExtractTextDegradedOutput,
-} from '../stages/types.js'
+} from '../stages/types'
 
 export const extractTextDegradedPrompt = definePrompt<ExtractTextDegradedInput, ExtractTextDegradedOutput>({
   name: 'extract-text-degraded',

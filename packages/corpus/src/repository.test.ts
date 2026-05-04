@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { CorpusRepository } from './repository.js'
+import { CorpusRepository } from './repository'
 import type { SupabaseClient } from '@parasol/core'
 
 // listRuns and healthSummary are read-only and take a small set of

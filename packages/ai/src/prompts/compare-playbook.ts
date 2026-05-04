@@ -11,12 +11,12 @@
 //   2. Playbook context block (cached, ~5min TTL within a session)
 //   3. User message with the extracted clauses for this document
 
-import { definePrompt } from '../types.js'
+import { definePrompt } from '../types'
 import {
   comparePlaybookOutputSchema,
   type ComparePlaybookInput,
   type ComparePlaybookOutput,
-} from '../stages/types.js'
+} from '../stages/types'
 
 export const comparePlaybookPrompt = definePrompt<ComparePlaybookInput, ComparePlaybookOutput>({
   name: 'compare-playbook',

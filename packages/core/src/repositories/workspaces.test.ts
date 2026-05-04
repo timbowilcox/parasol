@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { WorkspaceRepository, type Workspace } from './workspaces.js'
-import { NotFoundError } from '../errors/index.js'
-import type { SupabaseClient } from './types.js'
+import { WorkspaceRepository, type Workspace } from './workspaces'
+import { NotFoundError } from '../errors/index'
+import type { SupabaseClient } from './types'
 
 const sampleWorkspace: Workspace = {
   id: 'ws-1',

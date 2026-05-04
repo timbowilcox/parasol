@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest'
-import { ReviewRepository, type Review } from './reviews.js'
-import { NotFoundError, ValidationError } from '../errors/index.js'
-import type { SupabaseClient } from './types.js'
+import { ReviewRepository, type Review } from './reviews'
+import { NotFoundError, ValidationError } from '../errors/index'
+import type { SupabaseClient } from './types'
 
 const sampleReview: Review = {
   id: 'r-1',

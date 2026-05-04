@@ -5,7 +5,7 @@ import {
   isDocumentContentField,
   scrubEvent,
   type ScrubbableEvent,
-} from './pii-scrub.js'
+} from './pii-scrub'
 
 describe('scrubEmailAddresses', () => {
   it('replaces a plain email address', () => {

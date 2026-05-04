@@ -14,7 +14,7 @@
 // well above any single chunk). 500 tokens ≈ 2000 chars for English legal
 // text, so target 2000 chars by default.
 
-import type { NormalisedDocument, Chunk, Section } from './types.js'
+import type { NormalisedDocument, Chunk, Section } from './types'
 
 export interface ChunkerOptions {
   // Target chunk size in characters. Default: 2000 (~500 tokens).

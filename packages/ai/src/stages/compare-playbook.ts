@@ -1,12 +1,12 @@
-import { comparePlaybookPrompt } from '../prompts/compare-playbook.js'
-import type { Stage } from '../types.js'
-import { executeStage, DEFAULT_RETRY } from './runner.js'
+import { comparePlaybookPrompt } from '../prompts/compare-playbook'
+import type { Stage } from '../types'
+import { executeStage, DEFAULT_RETRY } from './runner'
 import {
   comparePlaybookInputSchema,
   comparePlaybookOutputSchema,
   type ComparePlaybookInput,
   type ComparePlaybookOutput,
-} from './types.js'
+} from './types'
 
 export const comparePlaybookStage: Stage<ComparePlaybookInput, ComparePlaybookOutput> = {
   name: 'compare-playbook',
