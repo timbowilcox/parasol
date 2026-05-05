@@ -19,7 +19,7 @@ import {
   extractEmailAddress,
   isSenderAllowed,
   classifyRecipients,
-  type InboundEmailData,
+  pickContractAttachment,
 } from '@/lib/inbound/email-webhook'
 import { processReview } from '@/server/process-review'
 
@@ -171,7 +171,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
       intake_source: 'email',
       contract_type: null,            // unknown until triage stage runs
       sender_email: senderHash,
-      original_filename: pickFirstAttachmentName(data),
+      original_filename: pickContractAttachment(data)?.filename ?? null,
       status: 'pending',
     })
     .select('id')
@@ -188,7 +188,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
   // Vercel's `after()` keeps the function alive past the response boundary
   // (up to maxDuration). When self-hosting we'd want a real queue (DEF-018);
   // Sprint 1 ships on Vercel so this is sufficient.
-  const firstAttachment = data.attachments[0] ?? null
+  const contractAttachment = pickContractAttachment(data)
   after(async () => {
     try {
       await processReview({
@@ -198,8 +198,8 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
         attachment: {
           kind: 'email',
           inboundEmailId: data.email_id,
-          attachmentId: firstAttachment?.id ?? null,
-          filename: firstAttachment?.filename ?? null,
+          attachmentId: contractAttachment?.id ?? null,
+          filename: contractAttachment?.filename ?? null,
         },
         replyEmail: {
           replyTo: senderAddress,
@@ -241,6 +241,3 @@ async function hashSenderEmail(addr: string): Promise<string> {
     .join('')
 }
 
-function pickFirstAttachmentName(data: InboundEmailData): string | null {
-  return data.attachments[0]?.filename ?? null
-}

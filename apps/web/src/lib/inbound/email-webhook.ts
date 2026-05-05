@@ -149,6 +149,43 @@ export type RecipientClassification =
   // Resend only delivers mail addressed to our domains. Treat as unexpected.
   | { kind: 'foreign'; recipients: readonly string[] }
 
+// ─── Attachment picker ──────────────────────────────────────────────────────
+// Real-world Outlook forwards routinely include 5-6 inline `Outlook-icon.png`
+// / `Outlook-photo.png` attachments (the email signature graphics) before the
+// actual document. A naive `attachments[0]` heuristic feeds those to the
+// orchestrator instead of the contract.
+//
+// Selection order:
+//   1. `content_disposition === 'attachment'` AND a contract-shaped MIME or
+//      filename extension (.docx / .pdf / .txt)
+//   2. any attachment with a contract-shaped MIME or filename extension
+//   3. any attachment whose `content_disposition` is 'attachment'
+//   4. fallback to the first attachment (preserves Sprint 1 behaviour on
+//      payloads with no clear signal — e.g. test fixtures with one PDF)
+//
+// Returns null when the email has no attachments at all.
+export function pickContractAttachment(data: InboundEmailData): InboundAttachment | null {
+  const atts = data.attachments
+  if (atts.length === 0) return null
+
+  const isContractShaped = (a: InboundAttachment): boolean => {
+    const mime = a.content_type.toLowerCase().split(';')[0]!.trim()
+    if (mime === 'application/pdf') return true
+    if (mime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return true
+    if (mime === 'text/plain') return true
+    const lower = a.filename.toLowerCase()
+    return lower.endsWith('.pdf') || lower.endsWith('.docx') || lower.endsWith('.txt')
+  }
+  const isExplicitAttachment = (a: InboundAttachment): boolean => {
+    return (a.content_disposition ?? '').toLowerCase() === 'attachment'
+  }
+
+  return atts.find((a) => isExplicitAttachment(a) && isContractShaped(a))
+    ?? atts.find(isContractShaped)
+    ?? atts.find(isExplicitAttachment)
+    ?? atts[0]!
+}
+
 // Inspect a `data.to` array and decide where to route. Priority: intake
 // wins over human_root wins over unexpected wins over foreign. So a single
 // email cc'd to both intake@... and tim@... still triggers the pipeline.

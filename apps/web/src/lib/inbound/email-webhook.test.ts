@@ -9,6 +9,8 @@ import {
   classifyRecipients,
   isAtIntakeSubdomain,
   isAtParasolDomain,
+  pickContractAttachment,
+  type InboundEmailData,
 } from './email-webhook'
 
 // A real Svix-format secret. Must be base64-encoded random bytes; Svix's
@@ -272,5 +274,96 @@ describe('classifyRecipients', () => {
 
   it('returns foreign for an empty to array', () => {
     expect(classifyRecipients([]).kind).toBe('foreign')
+  })
+})
+
+// ─── pickContractAttachment ─────────────────────────────────────────────────
+
+const buildData = (
+  attachments: InboundEmailData['attachments'],
+): InboundEmailData => ({
+  email_id: 'em',
+  created_at: '2026-05-05T11:26:21.000Z',
+  from: 'tim.wilcox@live.com',
+  to: ['ask@ask.parasol.co.ke'],
+  cc: [],
+  bcc: [],
+  message_id: '<m@x>',
+  subject: 'Fw:',
+  attachments,
+})
+
+describe('pickContractAttachment', () => {
+  it('returns null when there are no attachments', () => {
+    expect(pickContractAttachment(buildData([]))).toBeNull()
+  })
+
+  it('returns the only attachment when there is exactly one (Sprint 1 fixture path)', () => {
+    const sole = {
+      id: 'a-1',
+      filename: 'nda.pdf',
+      content_type: 'application/pdf',
+      content_disposition: 'attachment',
+    }
+    expect(pickContractAttachment(buildData([sole]))?.id).toBe('a-1')
+  })
+
+  it('skips inline Outlook signature images and picks the .docx — real-world Outlook forward payload', () => {
+    // Recreated from the actual Resend payload Tim received forwarding from
+    // Outlook on 2026-05-05. Five inline image attachments precede the actual
+    // contract; the naive `attachments[0]` heuristic would feed the first
+    // PNG to the orchestrator.
+    const data = buildData([
+      { id: '6f9dcd47', filename: 'Outlook-photo.png', content_type: 'image/png', content_disposition: 'inline' },
+      { id: 'b106e4ba', filename: 'Outlook-icon.png', content_type: 'image/png', content_disposition: 'inline' },
+      { id: 'c45d1005', filename: 'Outlook-icon.png', content_type: 'image/png', content_disposition: 'inline' },
+      { id: 'ff3180b6', filename: 'Outlook-icon.png', content_type: 'image/png', content_disposition: 'inline' },
+      { id: '20301459', filename: 'Outlook-icon.png', content_type: 'image/png', content_disposition: 'inline' },
+      {
+        id: '3170d491',
+        filename: 'Mutual NDA.docx',
+        content_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        content_disposition: 'attachment',
+      },
+    ])
+    expect(pickContractAttachment(data)?.id).toBe('3170d491')
+    expect(pickContractAttachment(data)?.filename).toBe('Mutual NDA.docx')
+  })
+
+  it('falls back to filename extension when MIME is generic application/octet-stream', () => {
+    const data = buildData([
+      { id: 'sig', filename: 'Outlook-icon.png', content_type: 'image/png', content_disposition: 'inline' },
+      {
+        id: 'doc',
+        filename: 'contract.docx',
+        content_type: 'application/octet-stream',
+        content_disposition: 'attachment',
+      },
+    ])
+    expect(pickContractAttachment(data)?.id).toBe('doc')
+  })
+
+  it('prefers content_disposition=attachment over inline when both are contract-shaped', () => {
+    const data = buildData([
+      // Some senders ship an inline preview PDF before the real attachment
+      { id: 'inline-pdf', filename: 'preview.pdf', content_type: 'application/pdf', content_disposition: 'inline' },
+      { id: 'real', filename: 'NDA.pdf', content_type: 'application/pdf', content_disposition: 'attachment' },
+    ])
+    expect(pickContractAttachment(data)?.id).toBe('real')
+  })
+
+  it('falls back to the first attachment when nothing matches any heuristic', () => {
+    const data = buildData([
+      { id: 'first', filename: 'mystery', content_type: 'application/x-unknown' },
+      { id: 'second', filename: 'mystery2', content_type: 'application/x-unknown' },
+    ])
+    expect(pickContractAttachment(data)?.id).toBe('first')
+  })
+
+  it('handles missing content_disposition without throwing', () => {
+    const data = buildData([
+      { id: 'no-dispo', filename: 'NDA.docx', content_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' },
+    ])
+    expect(pickContractAttachment(data)?.id).toBe('no-dispo')
   })
 })
