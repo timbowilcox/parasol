@@ -17,7 +17,7 @@ import {
 
 export const qualityAssessPrompt = definePrompt<QualityAssessInput, QualityAssessOutput>({
   name: 'quality-assess',
-  version: '0.1.0',
+  version: '0.2.0',
   modelRole: 'haiku',
   system: `You are a document-intake quality classifier for Parasol, an AI legal copilot.
 
@@ -37,19 +37,44 @@ A page is DEGRADED when it is:
 Score each page 0-1 (higher is cleaner). Threshold: 0.7 → clean, below → degraded.
 Recommend "clean" route only if every page passes; otherwise "degraded".
 
-Output strict JSON matching the supplied schema. No prose, no markdown.`,
+OUTPUT FORMAT — strict JSON, no prose, no markdown, no commentary.
+
+Every page object MUST include all four fields, every time, with no exceptions:
+- "pageNumber" (integer, copied from the input)
+- "qualityScore" (number between 0 and 1)
+- "isClean" (boolean — true when qualityScore >= 0.7, false otherwise)
+- "issues" (array of strings — empty array [] for clean pages; non-empty
+  for degraded pages, with short reason tokens like "skewed",
+  "low-resolution", "photographic", "redacted-overlay", "ocr-artefacts")
+
+Top-level object MUST include:
+- "pages" (array of page objects in input order)
+- "recommendedRoute" ("clean" if every page is clean; "degraded" otherwise)
+
+Do NOT omit fields even when they are obvious or empty. The schema validator
+rejects partial output.`,
 
   userTemplate: ({ pages }) => {
-    // For Sprint 1 the model receives a compact summary per page rather
-    // than the full text/image — quality-assess is a sniff test, not an
-    // extraction. Day 9 may upgrade to a full vision pass on the first
-    // page if the heuristic proves unreliable.
     const summary = pages.map((p) => {
       const hasText = typeof p.text === 'string' ? p.text.length : 0
       const hasImage = typeof p.imageBase64 === 'string'
       return `page ${p.pageNumber}: textChars=${hasText} hasImage=${hasImage}`
     }).join('\n')
-    return `Assess these ${pages.length} pages:\n\n${summary}\n\nReturn JSON {"pages": [...], "recommendedRoute": "clean"|"degraded"}.`
+    // Worked example forces the right shape — Haiku followed a partial-
+    // output pattern in production on a single-page DOCX, omitting
+    // qualityScore / isClean / issues entirely. Concrete examples
+    // anchor the model's output shape better than schema prose alone.
+    return `Assess these ${pages.length} pages:
+
+${summary}
+
+Example output for a single clean digital DOCX page:
+{"pages":[{"pageNumber":1,"qualityScore":0.95,"isClean":true,"issues":[]}],"recommendedRoute":"clean"}
+
+Example output for a two-page mixed input where page 2 is a photo:
+{"pages":[{"pageNumber":1,"qualityScore":0.92,"isClean":true,"issues":[]},{"pageNumber":2,"qualityScore":0.45,"isClean":false,"issues":["photographic","skewed"]}],"recommendedRoute":"degraded"}
+
+Now produce the JSON for the input above.`
   },
 
   outputSchema: qualityAssessOutputSchema,
