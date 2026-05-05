@@ -4,6 +4,32 @@ Date: 2026-05-05
 Sprint window: 2026-05-03 → 2026-05-16 (closing on Day 14)
 Final commit before close: this one
 
+## Post-close audit corrections (2026-05-05)
+
+A separate evaluator-agent session ran an adversarial audit of Sprint 1 against the production deploy at parasol-five.vercel.app. Three corrections of record were applied as a follow-up commit; this section documents them so the audit trail is honest.
+
+**Three SPRINT.md `[x]` boxes were unticked as falsified:**
+1. *"Test: query 'data protection cross-border transfer' returns DPA 2019 s.49 in top 3 results — `packages/corpus/src/retrieval.test.ts`"* — the cited test file contains zero references to that query string or to canonical id `2019/24`. The retrieval-test file uses synthetic chunks (`baseRow('a')`, `baseRow('z')`) and asserts RRF arithmetic. The corroborating test does not exist.
+2. *"Eval suite runs the pipeline on each NDA"* — the eval CLI explicitly throws when invoked with `--pipeline=production` (`packages/eval/src/cli/run.ts:66` — comment claims "lands Sprint 1 day 9", which is now stale by 4 days). The harness has only ever run the `stub-oracle` adapter. The harness scaffolding works; the orchestrator has never been measured by it.
+3. *"Sprint 1 acceptance bar passes"* — the stub-oracle pipeline (`pipeline-stub.ts:32-48`) deterministically projects `gt.expected_issues` back through itself. F1 = 1.000 against this stub is an identity check on the metrics module, not a measurement of the orchestrator. A production-pipeline F1 number does not yet exist.
+
+**Five new DEF entries (DEF-050..054) were added for silent scope-cuts** that the original close summary did not enumerate:
+- **DEF-050**: end-user authentication wiring. The web upload acceptance criterion was ticked but the surface is unreachable: `/login` is a stub. ROADMAP says Sprint 3.
+- **DEF-051**: `review.*` audit-log events. Acceptance criterion correctly left unticked at close, no DEF tracked the carry. `grep -c "audit_log\|audit\.append"` returns 0 across the upload + email + processReview paths.
+- **DEF-052**: lift the eval CLI's production gate and run the first Sonnet 4.7 baseline. Required by Sprint 2 Day 1's DEF-041 Opus A/B.
+- **DEF-053**: end-to-end p95 latency measurement.
+- **DEF-054**: integration test for the inbound email route handler.
+
+**The `/login` stub copy was corrected**: the original referenced "admin scripts" that don't exist anywhere in the repo and pointed at "Sprint 2 roadmap" when ROADMAP says Sprint 3. The new copy is honest about what's missing and points users at the email pathway, which is the only Sprint-1-reachable surface for a real user.
+
+**What this means for Sprint 2 planning.** Two of the three claimed user surfaces (web upload at `/review/new`, admin at `/admin/corpus`) are unreachable without operator-side database manipulation that isn't documented anywhere. The email pathway is the one functional surface, and its quality has never been measured end-to-end on a real document. Sprint 2 Day 1 should resolve DEF-052 (production-pipeline baseline) before DEF-041 (Opus A/B), since the latter has nothing to compare against without the former. A live forward test of the email pathway against the deployed app will produce DEF-053's first latency measurement at the same time.
+
+The audit's single most concerning finding: the "424 tests passing + eval gate PASS" narrative is an inner-loop self-consistency proof, not an outer-loop product validation. About half the tests assert that mocked components are called in the right order — they cannot catch a regression in the orchestrator's logic, the model's behaviour, or actual database query semantics. The audit recommends a 3-day Sprint 2 prefix to convert infrastructure into evidence: corrected ledger (this commit), production-pipeline F1 number (DEF-052), and live smoke on three real NDAs (DEF-053).
+
+The original sprint close narrative below stands for items not corrected above.
+
+---
+
 ## Sprint 1 in one paragraph
 
 Parasol's foundational pipeline is in. A Kenyan-jurisdiction NDA forwarded to `*@ask.parasol.co.ke` or dropped at `/review/new` flows through a 10-stage orchestrator (quality-assess → extract-text → triage → extract-clauses → compare-playbook → retrieve-authority → generate-redline → verify-citations → defined-terms-check → assemble-output), produces a structured review with cited Kenyan authority, surfaces the result on a BRAND.md-aligned web page or in a Resend-delivered reply email with a redlined .docx attached. The corpus admin lives at `/admin/corpus` (parasol_admin only, 404 to others) and lets operators trigger ingestion with audit-logged "Run now" buttons. The eval harness scores 20 annotated NDAs through stub-oracle with the gate passing.

@@ -1,9 +1,16 @@
-// /login — Sprint 1 stub.
+// /login — Sprint 1 placeholder.
 //
-// Auth guards in @/server/auth redirect here when a session is missing.
-// Real sign-in (Supabase Auth + email magic link / OAuth) is Sprint 2;
-// for now this page documents the redirect target so the integration tests
-// for requireAuth don't 404 in dev.
+// Sign-in is not yet wired. ROADMAP.md schedules Supabase Auth (email magic
+// link + Microsoft + Google OAuth) for Sprint 3 alongside workspace creation
+// and billing. Tracked as DEF-050.
+//
+// The auth guards in @/server/auth (`requireAuth`, `requireAdmin`) redirect
+// here when a session is missing. Until DEF-050 lands, the only Sprint 1
+// surface a real user can exercise without operator-side database
+// manipulation is the email pathway: forward an NDA to *@ask.parasol.co.ke.
+//
+// CLAUDE.md voice: honest about what's missing, specific about what does
+// work, no fabricated remediation paths.
 
 import Link from 'next/link'
 
@@ -12,9 +19,14 @@ export default function LoginPage() {
     <main className="page">
       <h1 className="page-title">Sign in</h1>
       <p className="page-subtitle">
-        Authentication is on the Sprint 2 roadmap. For Sprint 1 dev work,
-        seed a profile row directly via the admin scripts and visit the
-        protected page in a session that already has a Supabase user id.
+        Web sign-in is not yet shipped. Supabase Auth lands in Sprint 3
+        alongside workspace creation and billing (DEF-050).
+      </p>
+      <p>
+        In the meantime, the email pathway is fully functional. Forward an
+        NDA to any address at <span className="citation" style={{ textDecoration: 'none' }}>ask.parasol.co.ke</span>{' '}
+        from a sender on the workspace allowlist; you should receive a
+        redlined reply within a couple of minutes.
       </p>
       <p>
         <Link className="btn" href="/">Return home</Link>

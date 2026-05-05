@@ -25,7 +25,7 @@ As of scaffold creation, Sprint 1 will surface at least: DEF-005 (Voyage rerank 
 - [x] Voyage-3 embeddings generated and stored in pgvector column for every chunk
 - [x] BM25 keyword index operational on full text
 - [x] Hybrid retrieval function `retrieveAuthority(query, options)` returns ranked results, reciprocal-rank-fused and Voyage-reranked
-- [x] Test: query "data protection cross-border transfer" returns DPA 2019 s.49 in top 3 results — `packages/corpus/src/retrieval.test.ts`
+- [ ] Test: query "data protection cross-border transfer" returns DPA 2019 s.49 in top 3 results — falsified at Sprint 1 close: the cited test file does not contain that query string or any reference to DPA 2019 / canonical id 2019/24. Carry to Sprint 2 alongside the production-pipeline eval run (DEF-052).
 
 ### Playbook
 - [x] NDA playbook YAML written for Kenya, validated against schema in `docs/playbook-schema.md`
@@ -72,23 +72,23 @@ As of scaffold creation, Sprint 1 will surface at least: DEF-005 (Voyage rerank 
 ### Eval harness
 - [x] 20 real NDAs sourced (anonymised, with permission) and stored in `packages/eval/data/golden/nda/`
 - [ ] Each NDA has expert-validated ground truth — annotations are `parasol-internal-draft`; counsel-validated ground truth blocked on DEF-028.
-- [x] Eval suite runs the pipeline on each NDA and produces per-NDA scoring — runs against `pipeline=stub-oracle` per Day 13. Production pipeline run is deployment-gated.
+- [ ] Eval suite runs the pipeline on each NDA and produces per-NDA scoring — corrected at audit: the eval CLI explicitly throws on `--pipeline=production` (`packages/eval/src/cli/run.ts:66`), so the harness has only ever exercised `stub-oracle`, which mirrors ground truth. The harness scaffolding works; the orchestrator has never been measured. Tracked in DEF-052.
 - [x] Metrics tracked: clause identification precision/recall, citation validity rate, hallucination rate — redline appropriateness (1-5 rated subset) supported by harness; rated annotations deferred until production pipeline output exists.
-- [x] Sprint 1 acceptance bar passes — gate PASS for `sprint-1` (F1 = 1.000, citation validity = 1.000, hallucination = 0.000) on stub-oracle; first true production-pipeline numbers land at deployment.
+- [ ] Sprint 1 acceptance bar passes — corrected at audit: the gate PASS is on stub-oracle, which deterministically projects ground-truth back through itself. F1 = 1.000 against this stub is an identity check on the metrics module, not a measurement of the orchestrator. A production-pipeline F1 number does not yet exist. Tracked in DEF-052.
 - [x] Eval results committed to `packages/eval/results/sprint-1.json` and summarised in HANDOFF.md
 - [ ] Eval baseline established on Sonnet 4.7 for the heavy stages — baseline number lands at deployment (no live production-pipeline run yet).
 
 ## Definition of done
 
-- [x] All acceptance criteria checked with evidence — see notes above and Day 14 HANDOFF
-- [x] Tests written and passing (`pnpm test` clean) — 424 tests across 6 packages
+- [ ] All acceptance criteria checked with evidence — corrected at audit: three falsified ticks (lines 28, 75, 77) and several silent scope-cuts surfaced post-close. See the post-close audit corrections section in HANDOFF.md.
+- [x] Tests written and passing (`pnpm test` clean) — 424 tests across 6 packages. Audit note: ~half are mock-orchestration tests; behavioural integration coverage is uneven. The orchestrator's prompts have never run against a real model in tests.
 - [x] Zero TypeScript errors (`pnpm typecheck` clean)
 - [x] Lint clean (`pnpm lint` clean)
-- [x] Eval harness passes acceptance bar above — gate PASS on stub-oracle (production-run gating documented)
-- [x] HANDOFF.md updated and committed
-- [x] DEFERRED.md hygiene maintained — sprint:1-trigger items (DEF-011, DEF-028, DEF-046, DEF-047) carried with notes; DEF-001 / DEF-005 / DEF-008 already moved to Completed
+- [ ] Eval harness passes acceptance bar above — corrected at audit: stub-oracle pass is mechanically vacuous (DEF-052).
+- [x] HANDOFF.md updated and committed — post-close audit corrections appended.
+- [x] DEFERRED.md hygiene maintained — original six carries plus DEF-050..054 added post-close for the silently scope-cut items (auth, review.* audit, eval CLI gate, latency, inbound-route integration test).
 - [x] Git history is meaningful — no `wip` commits, each commit reads as a changelog entry
-- [ ] Evaluator agent session run, score ≥90% per CLAUDE.md grading rubric — outside this session's scope
+- [ ] Evaluator agent session run, score ≥90% per CLAUDE.md grading rubric — completed post-close as a separate session; report informs DEF-050..054.
 
 ## Quality rubric
 

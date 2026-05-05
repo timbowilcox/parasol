@@ -163,6 +163,39 @@ Path A architecture means Parasol is a US-incorporated SaaS selling cross-border
 - **Why it matters when picked up**: Without this, an outbound response that bounces or gets marked as spam disappears from operator visibility. The customer assumes Parasol ignored them. Long-term reputation risk on Resend's sending IPs if complaint rate goes uncaught.
 - **Whose action**: Claude Code (handler + table + activity feed wiring); Tim (configure the second webhook in Resend → Webhooks once handler ships)
 
+#### DEF-054: Inbound email route handler integration test
+- **Trigger**: `sprint:2 day 1`
+- **What**: `apps/web/src/app/api/inbound/email/route.ts` is the only Sprint-1-reachable user surface and has no test for the route handler itself. The Day 5 helpers (`email-webhook.ts`) are tested; the route that wires verification → recipient classification → workspace lookup → review insert → `processReview` via `after()` is not. Add an integration test that drives a Svix-signed payload through `POST` and asserts the review row is created and the after-callback is dispatched. Mock Resend's outbound + the orchestrator at the boundary; everything else exercises real code.
+- **Why deferred**: Surfaced post-close as a silent scope-cut. Acceptance criterion "Resend inbound webhook configured" was ticked on the strength of the helper tests; the audit found no top-level handler test.
+- **Whose action**: Claude Code
+
+#### DEF-053: End-to-end p95 latency measurement on real NDAs
+- **Trigger**: `sprint:2 day 1` (alongside DEF-052)
+- **What**: SPRINT.md acceptance criterion "End-to-end latency p95 < 60 seconds for an NDA up to 10 pages" was correctly left unticked at Sprint 1 close, but no DEF tracked the carry. Measure timings on the same three representative NDAs used in DEF-052's first production run (one US M&A, one UK template, one Kenyan supplier). Capture per-stage `pipeline_events.duration_ms`. Compare to the 60s p95 target. If the production pipeline measures comfortably under, tighten `maxDuration = 120` back to 60 on the route handlers (currently provisional per Day 10 HANDOFF).
+- **Why deferred**: Surfaced post-close. Discovery requires the production pipeline to be reachable from the harness (DEF-052) and a deployed Vercel preview Tim can forward email to.
+- **Whose action**: Claude Code (measurement + tightening); Tim (deployment + forward test)
+
+#### DEF-052: Eval CLI production gate + Sonnet 4.7 baseline
+- **Trigger**: `sprint:2 day 1` (immediately before DEF-041's Opus A/B)
+- **What**: `packages/eval/src/cli/run.ts:66` explicitly throws when invoked with `--pipeline=production` ("production pipeline not yet wired (lands Sprint 1 day 9)"). The orchestrator landed Day 9 but the CLI gate was never lifted. Lift it: build a `productionPipeline()` factory that resolves `GroundTruth.filename` → bytes → `PageInput[]` (via the same `extract-pages` helper the web upload uses) → `runOrchestrator(...)` with playbook + corpus retriever + citation resolver → maps `OrchestratorRunResult` to `PipelineOutput`. Run once on the 20-NDA dataset against a real Anthropic + Voyage key + the live corpus, commit the result as `packages/eval/results/sprint-1-production.json`. This is the Sonnet 4.7 baseline DEF-041's Opus A/B compares against; without it DEF-041 has no comparison point.
+- **Why deferred**: Surfaced post-close. The "eval gate PASS for sprint-1" reported in HANDOFF Day 13 was on `pipeline=stub-oracle`, which mirrors ground truth — mechanically vacuous as a quality measurement. The production-pipeline run was framed as "deployment-gated" but the actual blocker is the CLI throw.
+- **Why it matters**: Sprint 2 Day 1 (DEF-041) is scheduled to A/B Opus against the "Sprint 1 baseline". That baseline does not exist. Running it will also surface that the 20 annotations are templated by jurisdiction bucket (9 of 20 share the same `dispute_resolution` description verbatim) — a known limitation that affects how the score should be read but doesn't block establishing a baseline.
+- **Cost**: ~USD 5-15 in Anthropic + Voyage calls per full run.
+- **Whose action**: Claude Code (CLI lift + adapter); Tim (API keys + dev-project corpus seed)
+
+#### DEF-051: review.* audit-log events on web upload + email paths
+- **Trigger**: `sprint:2`
+- **What**: SPRINT.md acceptance criterion "All actions logged to `audit_log` table" was correctly left unticked at Sprint 1 close. `admin.corpus.*` events fire from the corpus admin route; `review.*` events (`review.created`, `review.processing`, `review.completed`, `review.failed`, `review.unsupported`) fire nowhere. `grep -c "audit_log\|audit\.append"` returns 0 across `apps/web/src/app/api/upload/route.ts`, `apps/web/src/app/api/inbound/email/route.ts`, and `apps/web/src/server/process-review.ts`. Wire `logAdminEvent`-style writes (or a `logReviewEvent` sibling helper) into the upload route, the inbound webhook, and the four `processReview` outcome branches.
+- **Why deferred**: Surfaced post-close as a silent scope-cut. HANDOFF Day 11 mentioned the carry verbally ("review.* events not yet wired (carry to Sprint 2 web-app surfaces)") but no DEF entry tracked it.
+- **Whose action**: Claude Code
+
+#### DEF-050: End-user authentication wiring (Supabase Auth)
+- **Trigger**: `sprint:3` (per ROADMAP.md — bundled with workspace creation + billing)
+- **What**: SPRINT.md acceptance criterion "Authenticated user can drag-and-drop or click-upload a .docx or PDF NDA at `/review/new`" was ticked at Sprint 1 close. The web upload code path is correct, but the surface is unreachable end-to-end: `/login` is a stub that points at "admin scripts" that don't exist in the repo. `requireAuth()` redirects unauthenticated callers to `/login`; `requireAdmin()` 404s them. The email pathway (`*@ask.parasol.co.ke` → webhook → orchestrator → reply) is the only Sprint-1-reachable surface for a real user. Sprint 3 wires Supabase Auth (email magic link + Microsoft + Google OAuth) per ROADMAP. Until then, two of the three claimed user surfaces (web upload, admin) require operator-side database manipulation that isn't documented anywhere.
+- **Why deferred**: Surfaced post-close. SPRINT.md "Out of scope" lists workspace creation (Sprint 3) and SSO but does NOT explicitly list end-user authentication. The /login stub's reference to "Sprint 2 roadmap" was wrong — ROADMAP says Sprint 3. The deferral was silent: no DEF entry, no explicit out-of-scope statement, no honest /login copy.
+- **Why it matters**: An external observer running through the deployed app at parasol-five.vercel.app sees a non-functional sign-in surface. The audit trail did not flag this as a known gap. Sprint 1's value to an end-user is one functional pathway (email), not three.
+- **Whose action**: Claude Code (Supabase Auth wiring); Tim (OAuth provider configuration in Microsoft + Google consoles)
+
 #### DEF-049: Server-Sent Events / RSC streaming for /review/[id] live progress
 - **Trigger**: `phase:v1-launch-hardening`
 - **What**: The Sprint 1 day-11 review page polls every 5 seconds via `<meta http-equiv="refresh">` while the review is in `pending` / `processing`. Replace with either a Server-Sent Events stream (the orchestrator's `pipeline_events` table is the natural source) or a Next 16 RSC progressive-render pipeline that suspends until completion. Either way, the user gets stage-by-stage updates ("Identifying clauses → Applying playbook → Verifying citations") instead of a static "processing…" banner that flips to the result.
@@ -294,9 +327,11 @@ Path A architecture means Parasol is a US-incorporated SaaS selling cross-border
 
 ---
 
-## Sprint 1 close summary (2026-05-05)
+## Sprint 1 close summary (2026-05-05) — corrected post-audit
 
-Sprint 1 carries into Sprint 2 the following items still tagged `sprint:1*`:
+Sprint 1 carries into Sprint 2-3 the following items.
+
+**Originally enumerated at close:**
 - **DEF-011**: register .co.ug, .co.tz, .co.rw — Tim, not blocking; carry as standing item.
 - **DEF-028**: NDA playbook lawyer review — Tim engages counsel; production gate is v1 launch. Sprint 1 ships the playbook with `status: draft` flagged in the YAML and surfaced to the model in the cached system prefix.
 - **DEF-046**: native Word tracked-changes for redline DOCX — code path produces visible `[REDLINE — clauseId: ...]` markers; native tracked-changes is Day 12 polish slot or post-launch.
@@ -304,7 +339,14 @@ Sprint 1 carries into Sprint 2 the following items still tagged `sprint:1*`:
 - **DEF-048**: migrate redline DOCX bytes from inline base64 to Supabase Storage — phase v1-launch-hardening.
 - **DEF-049**: SSE / RSC streaming for `/review/[id]` and `/admin/corpus` progress — phase v1-launch-hardening.
 
-The Sprint 1 production-pipeline measurement (live latency on 3 NDAs, first true F1) is gated on deployment + `pnpm db:migrate` on the dev project. Documented in Day 13 + Day 14 HANDOFFs.
+**Surfaced by post-close audit (2026-05-05) and added here for honest tracking:**
+- **DEF-050**: end-user authentication wiring (Supabase Auth). Silent scope-cut at Sprint 1 close. The /login stub's reference to "Sprint 2 roadmap" was wrong — ROADMAP says Sprint 3. Two of the three claimed user surfaces (web upload, admin) are unreachable without it.
+- **DEF-051**: `review.*` audit-log events on web upload + email paths. SPRINT.md acceptance left unticked correctly at close, but no DEF tracked the carry. Sprint 2.
+- **DEF-052**: lift the eval CLI's production-pipeline gate and run the first Sonnet 4.7 baseline. Sprint 1's "eval gate PASS" was on `stub-oracle`, which deterministically projects ground-truth back through itself. The CLI explicitly throws on `--pipeline=production` (`packages/eval/src/cli/run.ts:66`). Sprint 2 Day 1 — required by DEF-041.
+- **DEF-053**: end-to-end p95 latency measurement on three real NDAs, alongside DEF-052.
+- **DEF-054**: integration test for the inbound email route handler. The Sprint-1-reachable surface has no top-level handler test.
+
+The post-close audit also corrected three falsified `[x]` boxes in SPRINT.md. See the post-close audit corrections section in HANDOFF.md.
 
 ## Completed
 
