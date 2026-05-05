@@ -73,6 +73,47 @@ describe('inboundEmailPayloadSchema', () => {
       inboundEmailPayloadSchema.safeParse({ ...samplePayload, type: 'email.delivered' }).success,
     ).toBe(false)
   })
+
+  it('accepts the verbatim Resend payload Tim received on 2026-05-05 (content_id: null on the docx)', () => {
+    // This is the actual payload shape Resend delivered for an Outlook-
+    // forwarded NDA. The 5 inline signature PNGs have content_id strings;
+    // the contract DOCX has content_id: null. The original schema declared
+    // content_id as `.optional()` which accepted `undefined` but not
+    // `null`, so this payload returned 400 malformed_payload in production.
+    const payload = {
+      type: 'email.received',
+      created_at: '2026-05-05T11:26:21.000Z',
+      data: {
+        email_id: 'a5e95199-1f1a-4388-9365-b7f2970a2e28',
+        created_at: '2026-05-05T11:26:26.684Z',
+        from: 'tim.wilcox@live.com',
+        to: ['ask@ask.parasol.co.ke'],
+        cc: [],
+        bcc: [],
+        message_id: '<msg@x>',
+        subject: 'Fw:',
+        attachments: [
+          { id: '6f9dcd47', filename: 'Outlook-photo.png', content_type: 'image/png', content_disposition: 'inline', content_id: '<5737adc3-bab5-4f64-b46e-cd4ff54e5b13>' },
+          { id: 'b106e4ba', filename: 'Outlook-icon.png', content_type: 'image/png', content_disposition: 'inline', content_id: '<685684a8-dc16-4296-8f6b-bc4cadb23194>' },
+          { id: 'c45d1005', filename: 'Outlook-icon.png', content_type: 'image/png', content_disposition: 'inline', content_id: '<45ed9349-1d7d-49a5-8d1b-ae5abca26e7a>' },
+          { id: 'ff3180b6', filename: 'Outlook-icon.png', content_type: 'image/png', content_disposition: 'inline', content_id: '<7e4246fb-8ff2-437a-ae42-b35f4bc90466>' },
+          { id: '20301459', filename: 'Outlook-icon.png', content_type: 'image/png', content_disposition: 'inline', content_id: '<22b81804-c081-4780-b466-8ced3faf5dd6>' },
+          {
+            id: '3170d491',
+            filename: 'Mutual NDA.docx',
+            content_type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            content_disposition: 'attachment',
+            content_id: null,                              // ← the bug-trigger
+          },
+        ],
+      },
+    }
+    const r = inboundEmailPayloadSchema.safeParse(payload)
+    expect(r.success).toBe(true)
+    if (!r.success) return
+    expect(r.data.data.attachments).toHaveLength(6)
+    expect(r.data.data.attachments[5]!.content_id).toBeNull()
+  })
 })
 
 // ─── verifyInboundWebhook ────────────────────────────────────────────────────

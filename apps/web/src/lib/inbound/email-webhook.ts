@@ -19,8 +19,16 @@ export const inboundAttachmentSchema = z.object({
   id: z.string(),
   filename: z.string(),
   content_type: z.string(),
-  content_disposition: z.string().optional(),
-  content_id: z.string().optional(),
+  // Resend sends `null` (not absent) for these on attachments that aren't
+  // referenced inline. Zod's `.optional()` accepts only `undefined`, so a
+  // raw `.optional()` here rejects the real payload. `.nullish()` accepts
+  // both `null` and `undefined` and is the right defensive treatment for
+  // any field a third-party webhook may serialise inconsistently.
+  // Surfaced by the first live forward (2026-05-05): the contract DOCX has
+  // `content_id: null`; the 5 inline Outlook signature PNGs have content_id
+  // strings.
+  content_disposition: z.string().nullish(),
+  content_id: z.string().nullish(),
 })
 
 export const inboundEmailDataSchema = z.object({
