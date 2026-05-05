@@ -16,7 +16,7 @@ import {
 
 export const triagePrompt = definePrompt<TriageInput, TriageOutput>({
   name: 'triage',
-  version: '0.1.0',
+  version: '0.2.0',
   modelRole: 'haiku',
   system: `You are a contract classifier for Parasol, an AI legal copilot for in-house counsel in Kenya, Uganda, Tanzania, and Rwanda.
 
@@ -50,10 +50,30 @@ Given the full text of a single contract, identify:
 
 5. REASONING — one plain-English sentence explaining the call. Surfaces in the audit log.
 
-Output strict JSON matching the supplied schema. No prose, no markdown.`,
+OUTPUT FORMAT — strict JSON, no prose, no markdown, no commentary.
+
+Top-level object MUST include all of these fields, every time, with no exceptions:
+- "contractType" (string, one of the enum values above — never omit, use "unknown" if unsure)
+- "jurisdiction" (string, one of the enum values above — never omit, use "unknown" if unsure)
+- "parties" (array of objects; each object MUST have both "role" (string) and "name" (string).
+  Use empty string "" for placeholder names. If no parties identifiable, use empty array [])
+- "confidence" (string, one of "high" | "medium" | "manual_review_recommended")
+- "reasoning" (non-empty string)
+
+Do NOT omit any field, even when its value is unknown, empty, or obvious. The schema validator
+rejects partial output.`,
 
   userTemplate: ({ fullText }) => {
-    return `Classify this contract:\n\n---\n${fullText}\n---\n\nReturn JSON.`
+    return `Classify this contract:
+
+---
+${fullText}
+---
+
+Example output for a US-governed mutual NDA between Acme Inc and Beta LLC:
+{"contractType":"nda","jurisdiction":"unknown","parties":[{"role":"Disclosing Party","name":"Acme Inc"},{"role":"Receiving Party","name":"Beta LLC"}],"confidence":"high","reasoning":"Standard mutual NDA structure with Delaware governing law (outside EAC playbook scope)."}
+
+Now produce the JSON for the contract above.`
   },
 
   outputSchema: triageOutputSchema,

@@ -20,7 +20,7 @@ import {
 
 export const definedTermsCheckPrompt = definePrompt<DefinedTermsCheckInput, DefinedTermsCheckOutput>({
   name: 'defined-terms-check',
-  version: '0.1.0',
+  version: '0.2.0',
   modelRole: 'haiku',
   system: `You are a contract proofreader for Parasol, an AI legal copilot.
 
@@ -40,10 +40,35 @@ For each issue:
 
 Be conservative. Common terms used by all NDAs (e.g. "Disclosing Party", "Receiving Party") even when not explicitly defined are NOT undefined_use issues; they're conventional. Only flag terms that look like they SHOULD have been defined.
 
-Output strict JSON {"issues": [...]}. No prose, no markdown. Empty issues array is a valid output (clean document).`,
+OUTPUT FORMAT — strict JSON, no prose, no markdown, no commentary.
+
+Top-level object MUST be { "issues": [...] }. The array may be empty (clean document — empty
+issues array is the correct output).
+
+Every issue object in the array MUST include all of these fields, every time:
+- "term" (non-empty string, the defined term as it appears in the document)
+- "kind" (string, one of "undefined_use" | "unused_definition" | "inconsistent_use")
+- "description" (non-empty string, plain-English explanation)
+
+Optional field — include it when relevant, omit (don't set null) when absent:
+- "sectionReference" (string, the section/clause label)
+
+Do NOT omit any required field. The schema validator rejects partial output.`,
 
   userTemplate: ({ fullText }) => {
-    return `Review this contract for defined-term issues:\n\n---\n${fullText}\n---\n\nReturn JSON {"issues": [...]}.`
+    return `Review this contract for defined-term issues:
+
+---
+${fullText}
+---
+
+Example output for a clean document:
+{"issues":[]}
+
+Example output flagging two real issues:
+{"issues":[{"term":"Permitted Recipients","kind":"undefined_use","description":"Used in Section 5 but never defined in the document.","sectionReference":"Section 5"},{"term":"Acquirer","kind":"unused_definition","description":"Defined in the preamble but never referenced again."}]}
+
+Now produce the JSON for the contract above.`
   },
 
   outputSchema: definedTermsCheckOutputSchema,

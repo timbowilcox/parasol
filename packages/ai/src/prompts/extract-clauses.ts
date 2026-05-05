@@ -42,18 +42,11 @@ const NDA_CLAUSE_VOCABULARY = [
 
 export const extractClausesPrompt = definePrompt<ExtractClausesInput, ExtractClausesOutput>({
   name: 'extract-clauses',
-  version: '0.1.0',
+  version: '0.2.0',
   modelRole: 'haiku',
   system: `You are a legal-document parser for Parasol, an AI legal copilot.
 
 Given the full text of a contract and its contract type, decompose it into a list of clauses, mapping each to a controlled clause-id vocabulary.
-
-For each clause in the document, return:
-- clauseId: snake_case id from the supplied vocabulary when confident; otherwise 'unknown_<n>' with a sequential index starting at 1.
-- displayName: sentence-case human label (e.g. 'Term of confidentiality').
-- rawText: the verbatim clause body as it appears in the document. Do NOT paraphrase.
-- sectionReference: the document's own labelling for this clause if present (e.g. 'Section 5', 'Clause 3.2'); omit when absent.
-- clauseOrder: 0-indexed order in the document.
 
 For NDA contracts, the vocabulary is:
 ${NDA_CLAUSE_VOCABULARY.join(', ')}
@@ -64,10 +57,33 @@ Behavioural rules:
 - A "definitions" preamble counts as one clause with id "definition_of_confidential_information" only if the definition is specifically of confidential information; generic definitions sections should use 'unknown_<n>'.
 - Preserve original ordering via clauseOrder.
 
-Output strict JSON matching the supplied schema. No prose, no markdown.`,
+OUTPUT FORMAT — strict JSON, no prose, no markdown, no commentary.
+
+Top-level object MUST be { "clauses": [...] }.
+
+Every clause object in the array MUST include all of these fields, every time:
+- "clauseId" (string, snake_case from the vocabulary above when confident; otherwise
+  "unknown_<n>" with a sequential index starting at 1)
+- "displayName" (non-empty string, sentence-case human label, e.g. "Term of confidentiality")
+- "rawText" (non-empty string, verbatim clause body — do NOT paraphrase or summarise)
+- "clauseOrder" (integer, 0-indexed order in the document)
+
+Optional field — include it when relevant, omit (don't set null) when absent:
+- "sectionReference" (string, the document's own labelling, e.g. "Section 5", "Cl 3.2")
+
+Do NOT omit any required field. The schema validator rejects partial output.`,
 
   userTemplate: ({ fullText, contractType }) => {
-    return `Decompose this ${contractType.toUpperCase()} into clauses:\n\n---\n${fullText}\n---\n\nReturn JSON {"clauses": [...]}.`
+    return `Decompose this ${contractType.toUpperCase()} into clauses:
+
+---
+${fullText}
+---
+
+Example output for a tiny NDA with two clauses:
+{"clauses":[{"clauseId":"governing_law","displayName":"Governing law","rawText":"This Agreement shall be governed by the laws of Kenya.","sectionReference":"Section 12","clauseOrder":0},{"clauseId":"confidentiality_term","displayName":"Term of confidentiality","rawText":"This Agreement remains in effect for three (3) years from the Effective Date.","clauseOrder":1}]}
+
+Now produce the JSON for the contract above.`
   },
 
   outputSchema: extractClausesOutputSchema,

@@ -20,7 +20,7 @@ import {
 
 export const comparePlaybookPrompt = definePrompt<ComparePlaybookInput, ComparePlaybookOutput>({
   name: 'compare-playbook',
-  version: '0.1.0',
+  version: '0.2.0',
   modelRole: 'sonnet',
   system: `You are a Kenyan in-house counsel comparing a contract against your firm's negotiation playbook for Parasol.
 
@@ -54,7 +54,23 @@ For each extracted clause from the document:
 
 6. reasoning: one paragraph explaining the deviation. Cite the playbook position you compared against. This text gets passed verbatim to generate-redline.
 
-Output strict JSON {"deviations": [...]}. No prose, no markdown.`,
+OUTPUT FORMAT — strict JSON, no prose, no markdown, no commentary.
+
+Top-level object MUST be { "deviations": [...] }. The array may be empty if every
+document clause meets or beats the playbook standard.
+
+Every deviation object in the array MUST include all of these fields, every time:
+- "playbookClauseId" (non-empty string, the matched playbook clause id)
+- "matchedExtractedClauseId" (string, the clauseId from the input clauses; use "" empty
+  string when the playbook clause is missing from the document)
+- "position" (string, one of "standard" | "fallback" | "hard_limit" | "violation")
+- "severity" (string, one of "critical" | "material" | "minor")
+- "confidence" (string, one of "high" | "medium" | "manual_review_recommended")
+- "currentText" (string, verbatim clause body from the document; use "" empty string when
+  the clause is missing entirely from the document)
+- "reasoning" (non-empty string)
+
+Do NOT omit any field, even when its value is empty. The schema validator rejects partial output.`,
 
   userTemplate: ({ contractType, jurisdiction, clauses }) => {
     const lines = [
@@ -70,7 +86,12 @@ Output strict JSON {"deviations": [...]}. No prose, no markdown.`,
       lines.push(c.rawText)
       lines.push('')
     }
-    lines.push('Compare each clause against the playbook (supplied in system context). Return JSON.')
+    lines.push('Compare each clause against the playbook (supplied in system context).')
+    lines.push('')
+    lines.push('Example output for an NDA where governing law is Delaware (violation) and the data-protection clause is missing entirely:')
+    lines.push('{"deviations":[{"playbookClauseId":"governing_law","matchedExtractedClauseId":"governing_law","position":"violation","severity":"critical","confidence":"high","currentText":"This Agreement shall be governed by the laws of Delaware.","reasoning":"Delaware governing law breaches the Kenya playbook hard-limit set (Kenya/UK/Singapore/Mauritius/NY only)."},{"playbookClauseId":"data_protection","matchedExtractedClauseId":"","position":"violation","severity":"critical","confidence":"high","currentText":"","reasoning":"Document has no data-protection clause; Kenya playbook requires DPA 2019 processor obligations and cross-border transfer mechanism."}]}')
+    lines.push('')
+    lines.push('Now produce the JSON for the clauses above.')
     return lines.join('\n')
   },
 

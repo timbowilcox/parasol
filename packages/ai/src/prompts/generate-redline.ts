@@ -21,7 +21,7 @@ import {
 
 export const generateRedlinePrompt = definePrompt<GenerateRedlineInput, GenerateRedlineOutput>({
   name: 'generate-redline',
-  version: '0.1.0',
+  version: '0.2.0',
   modelRole: 'sonnet',
   system: `You are a Kenyan in-house counsel drafting a redline for Parasol.
 
@@ -58,7 +58,25 @@ Critical rules:
 - Match severity to the deviation's severity unless you have strong reason to disagree (in which case use a manual_review_recommended confidence).
 - Do not invent statute sections that don't appear in the supplied authority chunks. If the deviation's playbook reasoning cites authority not in the chunks, you may still reference it via citation, but flag confidence: medium.
 
-Output strict JSON {"issue": {...}}. No prose, no markdown.`,
+OUTPUT FORMAT — strict JSON, no prose, no markdown, no commentary.
+
+Top-level object MUST be { "issue": {...} }.
+
+The issue object MUST include all of these fields, every time:
+- "clauseId" (non-empty string, copied from the deviation's playbookClauseId)
+- "severity" (string, one of "critical" | "material" | "minor")
+- "confidence" (string, one of "high" | "medium" | "manual_review_recommended")
+- "currentPosition" (non-empty string, plain-English summary of what the document says)
+- "recommendedPosition" (non-empty string, plain-English summary of what the playbook advises)
+- "reasoning" (non-empty string, the short paragraph explaining the gap)
+- "redlineText" (string — the verbatim substitute text; use "" empty string when the clause
+  is missing entirely from the document and there is nothing to substitute in place)
+- "citations" (array of citation objects; use empty array [] if you have no citations.
+  Each citation object MUST have "source" (one of the enum values above), "id" (string),
+  and "validated" (boolean — always set false; verify-citations promotes to true).
+  Optional: "section" (string).)
+
+Do NOT omit any field, even when its value is empty. The schema validator rejects partial output.`,
 
   userTemplate: ({ contractType, jurisdiction, deviation }) => {
     const lines = [
@@ -76,7 +94,10 @@ Output strict JSON {"issue": {...}}. No prose, no markdown.`,
       'Compare-playbook reasoning:',
       deviation.reasoning,
       '',
-      'Generate the redline. Return JSON {"issue": {...}}.',
+      'Example output for a Delaware governing-law violation on a Kenyan-counterparty NDA:',
+      '{"issue":{"clauseId":"governing_law","severity":"critical","confidence":"high","currentPosition":"Document elects Delaware as the governing law and chosen forum.","recommendedPosition":"Playbook standard requires Kenyan governing law with NCIA arbitration in Nairobi; fallback accepts UK/Singapore/Mauritius/NY only.","reasoning":"Delaware falls outside the playbook hard-limit jurisdictions. Kenya-counterparty exposure to US procedural costs and unenforceability of a US judgment in Kenya is the substantive risk. Substitute Kenyan governing law and NCIA seat per Arbitration Act 1995 s.36.","redlineText":"This Agreement shall be governed by and construed in accordance with the laws of Kenya. Any dispute arising out of or in connection with this Agreement shall be referred to and finally resolved by arbitration administered by the Nairobi Centre for International Arbitration in accordance with the NCIA Arbitration Rules.","citations":[{"source":"kenya-statute","id":"1995/4","section":"s.36","validated":false},{"source":"kenya-statute","id":"2013/26","validated":false}]}}',
+      '',
+      'Now generate the redline for the deviation above. Return JSON.',
     ]
     return lines.join('\n')
   },
