@@ -100,14 +100,22 @@ export async function fetchInboundAttachment(input: FetchAttachmentInput): Promi
     return { ok: false, status: 0, detail: 'RESEND_API_KEY not configured' }
   }
 
-  // Resend documents this as GET /emails/{email_id}/attachments/{attachment_id}.
-  // Attachment download returns the raw bytes (not JSON) with the original
-  // Content-Type header.
-  const url = `https://api.resend.com/emails/${encodeURIComponent(input.emailId)}/attachments/${encodeURIComponent(input.attachmentId)}`
+  // Resend's inbound attachment retrieval lives under a different namespace
+  // than outbound emails:
+  //   GET /emails/receiving/{email_id}/attachments/{attachment_id}
+  // Original v0.2 code hit /emails/{id}/attachments/{id} which is the
+  // outbound namespace; an inbound email_id never resolves there and the
+  // call returns 404 "Email not found". Surfaced by Tim's first live
+  // forward (2026-05-05).
+  //
+  // The endpoint returns JSON metadata, not bytes. The actual download is a
+  // presigned URL in `download_url` (no auth header required on the fetch;
+  // expires at `expires_at`).
+  const metadataUrl = `https://api.resend.com/emails/receiving/${encodeURIComponent(input.emailId)}/attachments/${encodeURIComponent(input.attachmentId)}`
 
-  let response: Response
+  let metadataResponse: Response
   try {
-    response = await fetch(url, {
+    metadataResponse = await fetch(metadataUrl, {
       method: 'GET',
       headers: { Authorization: `Bearer ${apiKey}` },
     })
@@ -115,15 +123,42 @@ export async function fetchInboundAttachment(input: FetchAttachmentInput): Promi
     return { ok: false, status: 0, detail: `network error: ${(cause as Error).message}` }
   }
 
-  if (!response.ok) {
-    const detail = await response.text().catch(() => '<unreadable>')
-    return { ok: false, status: response.status, detail }
+  if (!metadataResponse.ok) {
+    const detail = await metadataResponse.text().catch(() => '<unreadable>')
+    return { ok: false, status: metadataResponse.status, detail }
   }
 
-  const buffer = await response.arrayBuffer()
+  const metadata = (await metadataResponse.json().catch(() => null)) as
+    | { download_url?: string; content_type?: string }
+    | null
+  if (!metadata?.download_url) {
+    return {
+      ok: false,
+      status: metadataResponse.status,
+      detail: 'attachment metadata missing download_url',
+    }
+  }
+
+  // Stage 2: fetch the bytes from the presigned URL. No Authorization header —
+  // the URL itself carries the signed credentials. Sending Bearer auth here
+  // can confuse the storage backend on some signed-URL implementations.
+  let bytesResponse: Response
+  try {
+    bytesResponse = await fetch(metadata.download_url, { method: 'GET' })
+  } catch (cause) {
+    return { ok: false, status: 0, detail: `download network error: ${(cause as Error).message}` }
+  }
+  if (!bytesResponse.ok) {
+    const detail = await bytesResponse.text().catch(() => '<unreadable>')
+    return { ok: false, status: bytesResponse.status, detail: `download failed: ${detail}` }
+  }
+
+  const buffer = await bytesResponse.arrayBuffer()
   return {
     ok: true,
     bytes: new Uint8Array(buffer),
-    contentType: response.headers.get('content-type') ?? 'application/octet-stream',
+    contentType: metadata.content_type
+      ?? bytesResponse.headers.get('content-type')
+      ?? 'application/octet-stream',
   }
 }
