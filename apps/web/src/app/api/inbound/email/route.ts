@@ -26,7 +26,13 @@ import { processReview } from '@/server/process-review'
 // Vercel-allocated max duration. The whole pipeline must complete within this
 // window or the function gets killed mid-run. 60s is the Sprint 1 p95 target;
 // 120s is the upper bound while we measure (Day 13 narrows it back to 60).
-export const maxDuration = 120
+// Bumped from 120 → 300 (Vercel Pro hard cap) after Tim's seventh live
+// forward (2026-05-06). compare-playbook on Sonnet 4.6 ran 61s on a single
+// real Mutual NDA + 5 sequential generate-redline calls at ~10s each =
+// ~110s on stages 5-7 alone; total elapsed at function kill was ~113s on
+// generate-redline #5. 300s gives headroom while DEF-049 streaming + a
+// proper queue (DEF-018) and / or parallelising generate-redline lands.
+export const maxDuration = 300
 
 // Sprint 1 fixed recipient. Once DEF-002 lands, parse the workspace slug out
 // of the local-part of the recipient (`ask@<slug>.parasol.co.ke`) and look

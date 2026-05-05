@@ -17,7 +17,8 @@ import { processReview } from '@/server/process-review'
 
 // Same upper bound as Day 10's email path. Vercel hobby caps at 60s; the
 // pipeline target is 60s p95 with 120s headroom while we measure.
-export const maxDuration = 120
+// See /api/inbound/email/route.ts for the rationale on bumping to 300.
+export const maxDuration = 300
 
 const ACCEPTED_TYPES = new Set([
   'application/pdf',
