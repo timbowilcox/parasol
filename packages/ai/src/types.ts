@@ -22,9 +22,17 @@ export interface ModelEnv {
 // Defaults applied when env vars are unset. Match .env.example defaults.
 // Sprint 1 baseline uses Sonnet on heavy stages; Sprint 2 A/B-tests Opus
 // on compare-playbook + generate-redline per DEF-041.
+//
+// Model id correction (2026-05-06): the Sprint 1 scaffold listed Sonnet
+// and Opus at "4.7", but the live Anthropic API only has Sonnet at 4.6
+// (`claude-sonnet-4-6`) and Opus at 4.7 (`claude-opus-4-7`) at this
+// point. Surfaced by Tim's sixth live forward — compare-playbook
+// returned 404 "model: claude-sonnet-4-7". Haiku is correct as-is
+// (`claude-haiku-4-5-20251001`) — verified by the four Haiku-driven
+// stages succeeding on the same run.
 export const DEFAULT_MODEL_BY_ROLE: Record<ModelRole, string> = {
   haiku: 'claude-haiku-4-5-20251001',
-  sonnet: 'claude-sonnet-4-7',
+  sonnet: 'claude-sonnet-4-6',
   opus: 'claude-opus-4-7',
 }
 

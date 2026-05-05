@@ -10,7 +10,7 @@ const sampleResult: EvalRunResult = {
   sprint: 'unit-test',
   pipeline: 'stub',
   git_sha: 'abc1234',
-  models: { sonnet: 'claude-sonnet-4-7' },
+  models: { sonnet: 'claude-sonnet-4-6' },
   per_nda: [
     {
       filename: 'nda-001.pdf',
@@ -95,7 +95,7 @@ describe('formatSummary', () => {
   it('reports models and git_sha when present', () => {
     const out = formatSummary(sampleResult)
     expect(out).toContain('git_sha : abc1234')
-    expect(out).toContain('sonnet=claude-sonnet-4-7')
+    expect(out).toContain('sonnet=claude-sonnet-4-6')
   })
 
   it('shows PASS verdict when aggregate clears the bar', () => {
